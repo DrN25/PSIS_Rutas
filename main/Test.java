@@ -32,30 +32,9 @@ public class Test {
     private static Map<String, String> streetNameMapData;
     private static BidirectionalSearch bidirectionalSearchData;
     
-    // Map visualization state
-    private double offsetX = 0;
-    private double offsetY = 0;
-    private double scale = 1.0;
-    private double lastMouseX, lastMouseY;
-    private boolean isDragging = false;
-    
-    // Route selection state
     private Integer selectedOrigin = null;
     private Integer selectedDestination = null;
     private List<Integer> currentRoute = new ArrayList<>();
-    
-    // Map bounds
-    private double minLat, maxLat, minLon, maxLon;
-    private double mapWidth = 1200;
-    private double mapHeight = 800;
-    
-    // Colors
-    private static final Color STREET_COLOR = Color.LIGHT_GRAY;
-    private static final Color SELECTED_ROUTE_COLOR = Color.RED;
-    private static final Color ORIGIN_COLOR = Color.GREEN;
-    private static final Color DESTINATION_COLOR = Color.BLUE;
-    private static final Color NODE_COLOR = Color.DARK_GRAY;
-    private static final Color BACKGROUND_COLOR = Color.WHITE;
     public static void main(String[] args) throws IOException {       
         MapDataResult result = CSVRouteLoader.loadFromCSV("main/rutas.csv");
         int n = result.nodeIndex.size();
