@@ -5,7 +5,6 @@ import java.util.Map;
 
 import algorithms.BidirectionalSearch;
 import models.*;
-import utils.GraphUtils;
 
 public class RouteDisplayer {
   // Función especial para mostrar recorrido detallado entre nodos específicos
