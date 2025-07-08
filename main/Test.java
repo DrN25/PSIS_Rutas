@@ -1,16 +1,10 @@
 package main;
-
-import java.io.BufferedReader;
-import java.io.FileInputStream;
-import java.io.InputStreamReader;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
-import java.util.concurrent.atomic.AtomicInteger;
 
 // Swing imports for GUI
 import javax.swing.*;
@@ -20,7 +14,7 @@ import java.awt.geom.*;
 import models.*;
 import algorithms.*;
 import graph.*;
-import utils.*;
+import loader.*;
 
 public class Test {
     
@@ -67,124 +61,10 @@ public class Test {
     public static void main(String[] args) throws IOException {
         String dirpath = "main/rutas.csv";
         
-        // Lectura con UTF-8
-        BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(dirpath), StandardCharsets.UTF_8));
-        
-        String line;
-        List<Route> routes = new ArrayList<>();
-        Map<String, Integer> nodeIndex = new HashMap<>();
-        Map<Integer, String> idToCoord = new HashMap<>();
-        AtomicInteger currentId = new AtomicInteger(0);
-        
-        br.readLine(); // Skip header
-        int lineNumber = 1; // Para tracking de líneas (empezando desde 1 después del header)
-        
-        while ((line = br.readLine()) != null) {
-            lineNumber++;
-            
-            // Usar el nuevo parser
-            String[] fields = CSVUtils.parseCSVLine(line);
-            
-            // Verificar que tenga exactamente 23 campos
-            if (fields.length != 23) {
-                System.err.println("ERROR: Línea " + lineNumber + " tiene " + fields.length + " campos, se esperaban 23");
-                System.err.println("Contenido: " + line.substring(0, Math.min(100, line.length())) + "...");
-                continue; // Saltar esta línea
-            }
-            
-            // Debug: mostrar algunos valores para las primeras líneas
-            if (lineNumber <= 5) {
-                System.out.println("Debug línea " + lineNumber + " (" + fields.length + " campos):");
-                for (int i = 0; i < Math.min(fields.length, 12); i++) {
-                    System.out.println("  Campo[" + i + "]: '" + fields[i] + "'");
-                }
-                System.out.println();
-            }
-            
-            // Verificar que el último campo contenga geometry
-            if (fields.length < 23 || !fields[22].contains("LINESTRING")) {
-                System.err.println("ERROR: Línea " + lineNumber + " no tiene geometría válida en el campo 23");
-                continue;
-            }
-            
-            String geometry = fields[22].replace("\"", "").replace("LINESTRING", "").trim();
-            if (geometry.isEmpty() || !geometry.startsWith("(") || !geometry.endsWith(")")) {
-                System.err.println("ERROR: Línea " + lineNumber + " tiene geometría malformada: " + geometry.substring(0, Math.min(50, geometry.length())));
-                continue;
-            }
-            
-            String[] points = geometry.substring(1, geometry.length() - 1).split(", ");
-            if (points.length < 2) {
-                System.err.println("ERROR: Línea " + lineNumber + " tiene menos de 2 puntos en la geometría");
-                continue;
-            }
-            
-            String start = points[0].trim();
-            String end = points[points.length - 1].trim();
-            
-            // Extraer nombre de calle usando los campos correctos
-            String street = "Unknown";
-            
-            // nom_mapa está en el campo 8 (índice 7)
-            if (fields[7] != null && !fields[7].trim().isEmpty()) {
-                street = fields[7].replace("\"", "").trim();
-            }
-            
-            // Si nom_mapa está vacío, usar nomoficial (campo 3, índice 2)
-            if (street.isEmpty() || street.equals("Unknown")) {
-                if (fields[2] != null && !fields[2].trim().isEmpty()) {
-                    street = fields[2].replace("\"", "").trim();
-                }
-            }
-            
-            if (street.isEmpty()) {
-                street = "Unknown";
-            }
-            
-            // Determinar si la calle es bidireccional basándose en el campo 'sentido' (campo 12, índice 11)
-            boolean isBidirectional = false;
-            if (fields.length > 11 && fields[11] != null) {
-                String sentido = fields[11].replace("\"", "").trim().toUpperCase();
-                isBidirectional = sentido.equals("DOBLE");
-                
-                // Debug: mostrar sentidos encontrados
-                if (lineNumber <= 10) {
-                    System.out.println("Línea " + lineNumber + " - Sentido: '" + sentido + "' - Bidireccional: " + isBidirectional);
-                }
-            }
-            
-            int origin = nodeIndex.computeIfAbsent(start, k -> {
-                int id = currentId.getAndIncrement();
-                idToCoord.put(id, start);
-                return id;
-            });
-            
-            int destination = nodeIndex.computeIfAbsent(end, k -> {
-                int id = currentId.getAndIncrement();
-                idToCoord.put(id, end);
-                return id;
-            });
-            
-            // Extraer longitud (campo 11, índice 10)
-            double length = 1.0;
-            try {
-                if (fields[10] != null && !fields[10].trim().isEmpty()) {
-                    String lengthStr = fields[10].replace("\"", "").trim();
-                    length = Double.parseDouble(lengthStr);
-                }
-            } catch (NumberFormatException e) {
-                System.err.println("WARNING: Línea " + lineNumber + " tiene longitud inválida: " + fields[10]);
-            }
-            
-            long cost = (long) length;
-            routes.add(new Route(origin, destination, cost, street, isBidirectional));
-        }
-        br.close();
-        
-        int n = nodeIndex.size();
-        System.out.println("Total lines processed: " + (lineNumber - 1));
+        MapDataResult result = CSVRouteLoader.loadFromCSV("main/rutas.csv");
+        int n = result.nodeIndex.size();
         System.out.println("Number of nodes: " + n);
-        System.out.println("Number of routes: " + routes.size());
+        System.out.println("Number of routes: " + result.routes.size());
         
         // Initialize graph
         Node[] graph = new Node[n];
@@ -194,7 +74,7 @@ public class Test {
         
         // Add edges to graph considerando direccionalidad
         int totalEdges = 0;
-        for (Route route : routes) {
+        for (Route route : result.routes) {
             // Siempre añadir la arista en la dirección original
             Edge forwardEdge = new Edge(route.origin, route.destination, route.cost, route.street);
             graph[route.origin].outEdges.add(forwardEdge);
@@ -215,7 +95,7 @@ public class Test {
         // Análisis de direccionalidad
         int bidirectionalCount = 0;
         int unidirectionalCount = 0;
-        for (Route route : routes) {
+        for (Route route : result.routes) {
             if (route.isBidirectional) {
                 bidirectionalCount++;
             } else {
@@ -225,11 +105,11 @@ public class Test {
 
         System.out.println("Bidirectional routes: " + bidirectionalCount);
         System.out.println("Unidirectional routes: " + unidirectionalCount);
-        System.out.println("Percentage bidirectional: " + (bidirectionalCount * 100.0 / routes.size()) + "%");
+        System.out.println("Percentage bidirectional: " + (bidirectionalCount * 100.0 / result.routes.size()) + "%");
                 
         // Crear mapa de aristas para búsqueda rápida
         Map<String, String> streetNameMap = new HashMap<>();
-        for (Route route : routes) {
+        for (Route route : result.routes) {
             streetNameMap.put(route.origin + "_" + route.destination, route.street);
             if (route.isBidirectional) {
                 streetNameMap.put(route.destination + "_" + route.origin, route.street);
@@ -276,7 +156,7 @@ public class Test {
         // Mostrar algunas coordenadas de ejemplo
         System.out.println("\nExample coordinates from the dataset:");
         int count = 0;
-        for (Map.Entry<Integer, String> entry : idToCoord.entrySet()) {
+        for (Map.Entry<Integer, String> entry : result.idToCoord.entrySet()) {
             if (count < 10) {
                 System.out.println("ID " + entry.getKey() + ": " + entry.getValue() + " (Component: " + componentMap.get(entry.getKey()) + ")");
                 count++;
@@ -294,24 +174,24 @@ public class Test {
         String node0Name = "CANTILO, INT.";
         String node9Name = "LA CACHILA";
         
-        if (idToCoord.containsKey(0) && idToCoord.containsKey(9)) {
-            RouteDisplayer.showDetailedRoute(graph, idToCoord, streetNameMap, 0, 9, node0Name, node9Name);
+        if (result.idToCoord.containsKey(0) && result.idToCoord.containsKey(9)) {
+            RouteDisplayer.showDetailedRoute(graph, result.idToCoord, streetNameMap, 0, 9, node0Name, node9Name);
             
             // ANALISIS PROFUNDO: Conectividad local de los nodos
-            ConnectivityAnalizer.analyzeLocalConnectivity(graph, idToCoord, streetNameMap, 0, node0Name);
-            ConnectivityAnalizer.analyzeLocalConnectivity(graph, idToCoord, streetNameMap, 9, node9Name);
+            ConnectivityAnalizer.analyzeLocalConnectivity(graph, result.idToCoord, streetNameMap, 0, node0Name);
+            ConnectivityAnalizer.analyzeLocalConnectivity(graph, result.idToCoord, streetNameMap, 9, node9Name);
             
             // BUSCAR RUTAS QUE SI FUNCIONEN para verificar que el sistema esta bien
-            ConnectivityAnalizer.findConnectedPairs(graph, idToCoord, streetNameMap, 3);
+            ConnectivityAnalizer.findConnectedPairs(graph, result.idToCoord, streetNameMap, 3);
             
         } else {
             System.out.println("ERROR: Los nodos 0 o 9 no existen en el dataset");
             System.out.println("Nodos disponibles: 0 a " + (n - 1));
-            if (idToCoord.containsKey(0)) {
-                System.out.println("Nodo 0 existe: " + idToCoord.get(0));
+            if (result.idToCoord.containsKey(0)) {
+                System.out.println("Nodo 0 existe: " + result.idToCoord.get(0));
             }
-            if (idToCoord.containsKey(9)) {
-                System.out.println("Nodo 9 existe: " + idToCoord.get(9));
+            if (result.idToCoord.containsKey(9)) {
+                System.out.println("Nodo 9 existe: " + result.idToCoord.get(9));
             }
         }
         
@@ -333,8 +213,8 @@ public class Test {
             String targetCoord = in.nextLine().trim();
             
             // Encontrar los nodos más cercanos a las coordenadas dadas
-            int source = GraphUtils.findNearestNode(sourceCoord, nodeIndex, idToCoord);
-            int target = GraphUtils.findNearestNode(targetCoord, nodeIndex, idToCoord);
+            int source = GraphUtils.findNearestNode(sourceCoord, result.nodeIndex, result.idToCoord);
+            int target = GraphUtils.findNearestNode(targetCoord, result.nodeIndex, result.idToCoord);
             
             if (source == -1) {
                 System.out.println("Could not find a node near the source coordinates: " + sourceCoord);
@@ -360,9 +240,9 @@ public class Test {
                 node.distance = new Distance();
             }
             
-            BidirectionalSearch.PathResult result = bidirectionalSearch.computeShortestPath(source, target, i);
+            BidirectionalSearch.PathResult resul = bidirectionalSearch.computeShortestPath(source, target, i);
             
-            if (result.distance == -1) {
+            if (resul.distance == -1) {
                 System.out.println("No route exists with Contraction Hierarchies");
                 // FALLBACK: Intentar Dijkstra simple para verificar conectividad real
                 System.out.println("Trying simple Dijkstra as fallback...");
@@ -375,10 +255,10 @@ public class Test {
                     System.out.println("This suggests an issue with the Contraction Hierarchies preprocessing");
                 }
             } else {
-                System.out.println("Shortest distance: " + result.distance + " meters");
+                System.out.println("Shortest distance: " + resul.distance + " meters");
                 
                 // Reconstruir y mostrar la ruta
-                List<Integer> path = bidirectionalSearch.reconstructPath(source, target, result.meetingNode);
+                List<Integer> path = bidirectionalSearch.reconstructPath(source, target, resul.meetingNode);
                 
                 if (path.size() > 1) {
                     System.out.println("Route (" + path.size() + " nodes):");
@@ -404,8 +284,8 @@ public class Test {
                     }
                     
                     // Mostrar las coordenadas reales de origen y destino
-                    System.out.println("\nActual origin coordinates: " + idToCoord.get(source));
-                    System.out.println("Actual destination coordinates: " + idToCoord.get(target));
+                    System.out.println("\nActual origin coordinates: " + result.idToCoord.get(source));
+                    System.out.println("Actual destination coordinates: " + result.idToCoord.get(target));
                 } else {
                     System.out.println("Unable to reconstruct the complete path");
                 }
@@ -422,7 +302,7 @@ public class Test {
         System.out.println("Launching GUI automatically...");
         
         // Set map data for GUI
-        setMapData(graph, idToCoord, streetNameMap, bidirectionalSearch);
+        setMapData(graph, result.idToCoord, streetNameMap, bidirectionalSearch);
         
         // Create and show GUI
         Test guiInstance = new Test();
