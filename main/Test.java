@@ -6,15 +6,10 @@ import java.io.InputStreamReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.PriorityQueue;
 import java.util.Scanner;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 // Swing imports for GUI
@@ -24,6 +19,7 @@ import java.awt.event.*;
 import java.awt.geom.*;
 import models.*;
 import algorithms.*;
+import graph.*;
 import utils.*;
 
 public class Test {
@@ -68,192 +64,6 @@ public class Test {
     private static final Color DESTINATION_COLOR = Color.BLUE;
     private static final Color NODE_COLOR = Color.DARK_GRAY;
     private static final Color BACKGROUND_COLOR = Color.WHITE;
-
-    
-    // Función especial para mostrar recorrido detallado entre nodos específicos
-    public static void showDetailedRoute(Node[] graph, Map<Integer, String> idToCoord, 
-                                       Map<String, String> streetNameMap, int sourceId, int targetId, 
-                                       String sourceName, String targetName) {
-        System.out.println("\n[MAP] RECORRIDO DETALLADO:");
-        System.out.println("==========================================");
-        System.out.println("Origen:  Nodo " + sourceId + " - " + sourceName);
-        System.out.println("         Coordenadas: " + idToCoord.get(sourceId));
-        System.out.println("Destino: Nodo " + targetId + " - " + targetName);
-        System.out.println("         Coordenadas: " + idToCoord.get(targetId));
-        System.out.println("==========================================");
-        
-        // Probar con Dijkstra simple primero
-        long simpleDistance = GraphUtils.simpleDijkstra(graph, sourceId, targetId);
-        System.out.println("[SEARCH] Dijkstra Simple: " + (simpleDistance == -1 ? "No route found" : simpleDistance + " metros"));
-        
-        // Probar con búsqueda bidireccional
-        BidirectionalSearch bidirectionalSearch = new BidirectionalSearch(graph);
-        
-        // Reset distance data
-        for (Node node : graph) {
-            node.distance = new Distance();
-        }
-        
-        BidirectionalSearch.PathResult result = bidirectionalSearch.computeShortestPath(sourceId, targetId, 999);
-        System.out.println("[SEARCH] Busqueda Bidireccional: " + (result.distance == -1 ? "No route found" : result.distance + " metros"));
-        
-        if (result.distance != -1) {
-            List<Integer> path = bidirectionalSearch.reconstructPath(sourceId, targetId, result.meetingNode);
-            
-            if (path.size() > 1) {
-                System.out.println("\n[ROUTE] RUTA ENCONTRADA (" + path.size() + " nodos):");
-                long totalDistance = 0;
-                
-                for (int i = 0; i < path.size() - 1; i++) {
-                    int from = path.get(i);
-                    int to = path.get(i + 1);
-                    
-                    // Buscar distancia real entre nodos consecutivos
-                    long segmentDistance = 0;
-                    String streetName = "Unknown street";
-                    
-                    // Buscar en las aristas del grafo
-                    for (Edge edge : graph[from].outEdges) {
-                        if (edge.to == to) {
-                            segmentDistance = edge.weight;
-                            streetName = edge.streetName;
-                            break;
-                        }
-                    }
-                    
-                    // Fallback: buscar en el mapa de calles
-                    if (streetName.equals("Unknown street")) {
-                        streetName = streetNameMap.get(from + "_" + to);
-                        if (streetName == null) streetName = "Unknown street";
-                    }
-                    
-                    totalDistance += segmentDistance;
-                    
-                    System.out.printf("  %d. Nodo %d → Nodo %d | %s | %d metros\n", 
-                                     (i + 1), from, to, streetName, segmentDistance);
-                    System.out.printf("     Coords: %s → %s\n", 
-                                     idToCoord.get(from), idToCoord.get(to));
-                }
-                
-                System.out.println("\n[SUMMARY] RESUMEN:");
-                System.out.println("   Total distance: " + totalDistance + " metros");
-                System.out.println("   Segments: " + (path.size() - 1));
-                System.out.println("   Meeting node: " + result.meetingNode);
-            } else {
-                System.out.println("[ERROR] No se pudo reconstruir la ruta completa");
-            }
-        } else {
-            System.out.println("[ERROR] No existe ruta entre estos nodos");
-            
-            // Verificar si están en el mismo componente
-            System.out.println("\n[ANALYSIS] ANALISIS DE CONECTIVIDAD:");
-            System.out.println("Verificando si los nodos están en el mismo componente...");
-        }
-        
-        System.out.println("==========================================\n");
-    }
-    
-    // Función para analizar la conectividad local de un nodo
-    public static void analyzeLocalConnectivity(Node[] graph, Map<Integer, String> idToCoord, 
-                                              Map<String, String> streetNameMap, int nodeId, String nodeName) {
-        System.out.println("\n[CONNECTIVITY] ANALISIS LOCAL DEL NODO " + nodeId + " (" + nodeName + "):");
-        System.out.println("Coordenadas: " + idToCoord.get(nodeId));
-        
-        Node node = graph[nodeId];
-        System.out.println("Aristas salientes: " + node.outEdges.size());
-        System.out.println("Aristas entrantes: " + node.inEdges.size());
-        
-        if (node.outEdges.size() > 0) {
-            System.out.println("\nConexiones SALIENTES:");
-            for (int i = 0; i < Math.min(node.outEdges.size(), 5); i++) {
-                Edge edge = node.outEdges.get(i);
-                System.out.printf("  -> Nodo %d | %s | %d metros\n", 
-                                 edge.to, edge.streetName, edge.weight);
-                System.out.printf("     Coords destino: %s\n", idToCoord.get(edge.to));
-            }
-            if (node.outEdges.size() > 5) {
-                System.out.println("  ... y " + (node.outEdges.size() - 5) + " conexiones más");
-            }
-        }
-        
-        if (node.inEdges.size() > 0) {
-            System.out.println("\nConexiones ENTRANTES:");
-            for (int i = 0; i < Math.min(node.inEdges.size(), 5); i++) {
-                Edge edge = node.inEdges.get(i);
-                System.out.printf("  <- Nodo %d | %s | %d metros\n", 
-                                 edge.from, edge.streetName, edge.weight);
-                System.out.printf("     Coords origen: %s\n", idToCoord.get(edge.from));
-            }
-            if (node.inEdges.size() > 5) {
-                System.out.println("  ... y " + (node.inEdges.size() - 5) + " conexiones más");
-            }
-        }
-        
-        if (node.outEdges.size() == 0 && node.inEdges.size() == 0) {
-            System.out.println("[WARNING] Este nodo está AISLADO - no tiene conexiones!");
-        }
-        
-        System.out.println("==========================================");
-    }
-    
-    // Función para encontrar pares de nodos conectados para pruebas
-    public static void findConnectedPairs(Node[] graph, Map<Integer, String> idToCoord, 
-                                        Map<String, String> streetNameMap, int maxTests) {
-        System.out.println("\n[TESTING] BUSCANDO PARES DE NODOS CONECTADOS:");
-        System.out.println("==========================================");
-        
-        int testsFound = 0;
-        BidirectionalSearch bidirectionalSearch = new BidirectionalSearch(graph);
-        
-        // Probar con nodos que tengan conexiones salientes
-        for (int source = 0; source < Math.min(graph.length, 50) && testsFound < maxTests; source++) {
-            if (graph[source].outEdges.size() > 0) {
-                // Probar con algunos de sus vecinos directos
-                for (Edge edge : graph[source].outEdges) {
-                    if (testsFound >= maxTests) break;
-                    
-                    int target = edge.to;
-                    
-                    // Reset distance data
-                    for (Node node : graph) {
-                        node.distance = new Distance();
-                    }
-                    
-                    // Probar la búsqueda
-                    BidirectionalSearch.PathResult result = bidirectionalSearch.computeShortestPath(source, target, 999);
-                    
-                    if (result.distance != -1) {
-                        testsFound++;
-                        System.out.printf("[TEST %d] RUTA ENCONTRADA:\n", testsFound);
-                        System.out.printf("  Nodo %d -> Nodo %d | Distancia: %d metros\n", 
-                                         source, target, result.distance);
-                        System.out.printf("  Coords: %s -> %s\n", 
-                                         idToCoord.get(source), idToCoord.get(target));
-                        System.out.printf("  Via: %s\n", edge.streetName);
-                        
-                        // Mostrar la ruta completa
-                        List<Integer> path = bidirectionalSearch.reconstructPath(source, target, result.meetingNode);
-                        if (path.size() > 1) {
-                            System.out.printf("  Ruta completa (%d nodos): ", path.size());
-                            for (int i = 0; i < Math.min(path.size(), 5); i++) {
-                                System.out.print(path.get(i));
-                                if (i < Math.min(path.size(), 5) - 1) System.out.print(" -> ");
-                            }
-                            if (path.size() > 5) System.out.print(" ... -> " + path.get(path.size() - 1));
-                            System.out.println();
-                        }
-                        System.out.println();
-                    }
-                }
-            }
-        }
-        
-        if (testsFound == 0) {
-            System.out.println("[WARNING] No se encontraron rutas exitosas en los primeros 50 nodos");
-        }
-        
-        System.out.println("==========================================");
-    }      
     public static void main(String[] args) throws IOException {
         String dirpath = "main/rutas.csv";
         
@@ -485,14 +295,14 @@ public class Test {
         String node9Name = "LA CACHILA";
         
         if (idToCoord.containsKey(0) && idToCoord.containsKey(9)) {
-            showDetailedRoute(graph, idToCoord, streetNameMap, 0, 9, node0Name, node9Name);
+            RouteDisplayer.showDetailedRoute(graph, idToCoord, streetNameMap, 0, 9, node0Name, node9Name);
             
             // ANALISIS PROFUNDO: Conectividad local de los nodos
-            analyzeLocalConnectivity(graph, idToCoord, streetNameMap, 0, node0Name);
-            analyzeLocalConnectivity(graph, idToCoord, streetNameMap, 9, node9Name);
+            ConnectivityAnalizer.analyzeLocalConnectivity(graph, idToCoord, streetNameMap, 0, node0Name);
+            ConnectivityAnalizer.analyzeLocalConnectivity(graph, idToCoord, streetNameMap, 9, node9Name);
             
             // BUSCAR RUTAS QUE SI FUNCIONEN para verificar que el sistema esta bien
-            findConnectedPairs(graph, idToCoord, streetNameMap, 3);
+            ConnectivityAnalizer.findConnectedPairs(graph, idToCoord, streetNameMap, 3);
             
         } else {
             System.out.println("ERROR: Los nodos 0 o 9 no existen en el dataset");
