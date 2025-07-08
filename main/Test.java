@@ -9,15 +9,13 @@ import java.util.Scanner;
 // Swing imports for GUI
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.*;
-import java.awt.geom.*;
 import models.*;
 import algorithms.*;
 import graph.*;
 import loader.*;
+import gui.*;
 
 public class Test {
-    
     // GUI Components
     private JFrame mainFrame;
     private MapPanel mapPanel;
@@ -58,9 +56,7 @@ public class Test {
     private static final Color DESTINATION_COLOR = Color.BLUE;
     private static final Color NODE_COLOR = Color.DARK_GRAY;
     private static final Color BACKGROUND_COLOR = Color.WHITE;
-    public static void main(String[] args) throws IOException {
-        String dirpath = "main/rutas.csv";
-        
+    public static void main(String[] args) throws IOException {       
         MapDataResult result = CSVRouteLoader.loadFromCSV("main/rutas.csv");
         int n = result.nodeIndex.size();
         System.out.println("Number of nodes: " + n);
@@ -318,559 +314,7 @@ public class Test {
         // Keep the program alive for the GUI
         System.out.println("GUI is now running. Close the window to exit the program.");
     }
-    
-    // Custom JPanel for map visualization
-    class MapPanel extends JPanel {
-        
-        public MapPanel() {
-            setPreferredSize(new Dimension((int)mapWidth, (int)mapHeight));
-            setBackground(BACKGROUND_COLOR);
-            
-            // Mouse listeners for pan and zoom
-            addMouseListener(new MouseAdapter() {
-                @Override
-                public void mousePressed(MouseEvent e) {
-                    lastMouseX = e.getX();
-                    lastMouseY = e.getY();
-                    isDragging = true;
-                }
-                
-                @Override
-                public void mouseReleased(MouseEvent e) {
-                    isDragging = false;
-                }
-                
-                @Override
-                public void mouseClicked(MouseEvent e) {
-                    if (e.getClickCount() == 1) {
-                        handleMapClick(e.getX(), e.getY());
-                    }
-                }
-            });
-            
-            addMouseMotionListener(new MouseAdapter() {
-                @Override
-                public void mouseDragged(MouseEvent e) {
-                    if (isDragging) {
-                        double deltaX = e.getX() - lastMouseX;
-                        double deltaY = e.getY() - lastMouseY;
-                        
-                        // Move the offset directly by pixel amount (no scale division needed)
-                        offsetX += deltaX;
-                        offsetY += deltaY;
-                        
-                        lastMouseX = e.getX();
-                        lastMouseY = e.getY();
-                        
-                        repaint();
-                    }
-                }
-                
-                @Override
-                public void mouseMoved(MouseEvent e) {
-                    // Show tooltip with nearest node info
-                    showNodeInfo(e.getX(), e.getY());
-                }
-            });
-            
-            // Mouse wheel listener for zoom
-            addMouseWheelListener(new MouseWheelListener() {
-                @Override
-                public void mouseWheelMoved(MouseWheelEvent e) {
-                    double zoomFactor = 1.15; // Slightly smoother zoom
-                    double oldScale = scale;
-                    
-                    // Get mouse position for centered zoom
-                    double mouseX = e.getX();
-                    double mouseY = e.getY();
-                    
-                    if (e.getWheelRotation() > 0) {
-                        scale /= zoomFactor;
-                    } else {
-                        scale *= zoomFactor;
-                    }
-                    
-                    // Dynamic zoom limits - further increased max zoom for ultra-detailed view
-                    double minScale = 50.0;      // Minimum zoom for overview
-                    double maxScale = 1000000.0; // Maximum zoom for ultra-detailed view
-                    scale = Math.max(minScale, Math.min(scale, maxScale));
-                    
-                    // Adjust offset to zoom towards mouse cursor
-                    double scaleRatio = scale / oldScale;
-                    offsetX = mouseX - (mouseX - offsetX) * scaleRatio;
-                    offsetY = mouseY - (mouseY - offsetY) * scaleRatio;
-                    
-                    repaint();
-                }
-            });
-        }
-        
-        @Override
-        protected void paintComponent(Graphics g) {
-            super.paintComponent(g);
-            
-            if (graphData == null || idToCoordData == null) {
-                g.drawString("Loading map data...", 20, 30);
-                return;
-            }
-            
-            Graphics2D g2d = (Graphics2D) g;
-            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            
-            // Calculate map bounds and auto-fit if not done yet
-            if (minLat == 0 && maxLat == 0) {
-                calculateMapBounds();
-                fitMapToWindow();
-            }
-            
-            // Draw all streets
-            drawStreets(g2d);
-            
-            // Draw all nodes as white circles (vacant points)
-            drawAllNodes(g2d);
-            
-            // Draw selected route
-            if (!currentRoute.isEmpty()) {
-                drawRoute(g2d, currentRoute);
-            }
-            
-            // Draw selected nodes (highlighted)
-            drawSelectedNodes(g2d);
-            
-            // Draw scale and legend
-            drawLegend(g2d);
-        }
-        
-        private void calculateMapBounds() {
-            // Buenos Aires strict bounds for filtering
-            double BA_MIN_LON = -58.7;
-            double BA_MAX_LON = -58.3;
-            double BA_MIN_LAT = -34.8;
-            double BA_MAX_LAT = -34.4;
-            
-            minLat = BA_MAX_LAT;
-            maxLat = BA_MIN_LAT;
-            minLon = BA_MAX_LON;
-            maxLon = BA_MIN_LON;
-            
-            int validCoords = 0;
-            int totalCoords = 0;
-            
-            for (String coord : idToCoordData.values()) {
-                totalCoords++;
-                String[] parts = coord.split(" ");
-                if (parts.length == 2) {
-                    try {
-                        double lon = Double.parseDouble(parts[0]);
-                        double lat = Double.parseDouble(parts[1]);
-                        
-                        // Only include coordinates that are clearly in Buenos Aires
-                        if (lon >= BA_MIN_LON && lon <= BA_MAX_LON && 
-                            lat >= BA_MIN_LAT && lat <= BA_MAX_LAT) {
-                            
-                            minLon = Math.min(minLon, lon);
-                            maxLon = Math.max(maxLon, lon);
-                            minLat = Math.min(minLat, lat);
-                            maxLat = Math.max(maxLat, lat);
-                            validCoords++;
-                        }
-                    } catch (NumberFormatException e) {
-                        // Skip invalid coordinates
-                    }
-                }
-            }
-            
-            // If we have valid coordinates, add small padding
-            if (validCoords > 0) {
-                double lonRange = maxLon - minLon;
-                double latRange = maxLat - minLat;
-                
-                // Ensure minimum range
-                if (lonRange < 0.1) {
-                    double center = (minLon + maxLon) / 2;
-                    minLon = center - 0.05;
-                    maxLon = center + 0.05;
-                }
-                if (latRange < 0.1) {
-                    double center = (minLat + maxLat) / 2;
-                    minLat = center - 0.05;
-                    maxLat = center + 0.05;
-                }
-                
-                // Add small padding
-                lonRange = maxLon - minLon;
-                latRange = maxLat - minLat;
-                minLon -= lonRange * 0.02;
-                maxLon += lonRange * 0.02;
-                minLat -= latRange * 0.02;
-                maxLat += latRange * 0.02;
-            } else {
-                // Use default Buenos Aires bounds if no valid coordinates found
-                minLon = -58.6;
-                maxLon = -58.3;
-                minLat = -34.7;
-                maxLat = -34.5;
-            }
-            
-            System.out.println("Map bounds calculated:");
-            System.out.println("Valid coordinates: " + validCoords + "/" + totalCoords);
-            System.out.println("Longitude: " + minLon + " to " + maxLon);
-            System.out.println("Latitude: " + minLat + " to " + maxLat);
-        }
-        
-        private void fitMapToWindow() {
-            // Calculate the scale needed to fit the entire map in the window
-            double lonRange = maxLon - minLon;
-            double latRange = maxLat - minLat;
-            
-            if (lonRange <= 0 || latRange <= 0) return; // Invalid range
-            
-            // Get actual panel size
-            int panelWidth = getWidth();
-            int panelHeight = getHeight();
-            
-            // Use default size if panel not yet sized
-            if (panelWidth <= 0) panelWidth = 800;
-            if (panelHeight <= 0) panelHeight = 600;
-            
-            // Calculate scale to fit the map in the window
-            // Simple approach: map the coordinate range to pixels
-            double scaleX = (panelWidth * 0.9) / lonRange;  // 90% of width
-            double scaleY = (panelHeight * 0.9) / latRange; // 90% of height
-            
-            // Use the smaller scale to ensure everything fits
-            scale = Math.min(scaleX, scaleY);
-            
-            // Ensure scale is reasonable
-            if (scale < 1000) scale = 1000;     // Minimum scale for visibility
-            if (scale > 1000000) scale = 1000000; // Ultra maximum scale consistent with mouse zoom
-            
-            // Calculate offset to center the map
-            // Map center coordinates
-            double mapCenterLon = (minLon + maxLon) / 2.0;
-            double mapCenterLat = (minLat + maxLat) / 2.0;
-            
-            // Center point in screen coordinates before scaling
-            double centerX = (mapCenterLon - minLon) * scaleX;
-            double centerY = (maxLat - mapCenterLat) * scaleY;
-            
-            // Offset to center in panel
-            offsetX = (panelWidth / 2.0) - centerX;
-            offsetY = (panelHeight / 2.0) - centerY;
-            
-            System.out.println("Auto-fit applied:");
-            System.out.println("Scale: " + scale);
-            System.out.println("Offset: (" + offsetX + ", " + offsetY + ")");
-            System.out.println("Panel size: " + panelWidth + "x" + panelHeight);
-            System.out.println("Coordinate range: lon(" + lonRange + ") lat(" + latRange + ")");
-        }
-        
-        private void drawStreets(Graphics2D g2d) {
-            // Draw all street segments with direction indicators
-            for (Node node : graphData) {
-                for (Edge edge : node.outEdges) {
-                    Point2D.Double start = coordToScreen(idToCoordData.get(edge.from));
-                    Point2D.Double end = coordToScreen(idToCoordData.get(edge.to));
-                    
-                    if (start != null && end != null) {
-                        drawStreetSegment(g2d, start, end, edge);
-                    }
-                }
-            }
-        }
-        
-        private void drawStreetSegment(Graphics2D g2d, Point2D.Double start, Point2D.Double end, Edge edge) {
-            // Check if this street is bidirectional by looking for reverse edge
-            boolean isBidirectional = false;
-            for (Edge reverseEdge : graphData[edge.to].outEdges) {
-                if (reverseEdge.to == edge.from && reverseEdge.streetName.equals(edge.streetName)) {
-                    isBidirectional = true;
-                    break;
-                }
-            }
-            
-            // Set line style based on directionality and zoom level
-            float baseThickness = Math.max(1.0f, (float)(scale / 50000)); // Scale thickness with zoom
-            if (scale > 100000) {
-                baseThickness = Math.max(2.0f, (float)(scale / 100000)); // Thicker lines for ultra-high zoom
-            }
-            
-            if (isBidirectional) {
-                // Bidirectional: thicker line
-                g2d.setColor(STREET_COLOR);
-                g2d.setStroke(new BasicStroke(baseThickness * 1.5f));
-            } else {
-                // Unidirectional: thinner line
-                g2d.setColor(STREET_COLOR.darker());
-                g2d.setStroke(new BasicStroke(baseThickness));
-            }
-            
-            // Draw the main line
-            g2d.drawLine((int)start.x, (int)start.y, (int)end.x, (int)end.y);
-            
-            // Draw direction arrow for unidirectional streets (only at higher zoom levels)
-            if (!isBidirectional && scale > 2000) {
-                drawDirectionArrow(g2d, start, end);
-            }
-        }
-        
-        private void drawDirectionArrow(Graphics2D g2d, Point2D.Double start, Point2D.Double end) {
-            // Calculate arrow parameters
-            double dx = end.x - start.x;
-            double dy = end.y - start.y;
-            double length = Math.sqrt(dx * dx + dy * dy);
-            
-            // Only draw arrow if line is long enough
-            if (length < 20) return;
-            
-            // Normalize direction vector
-            double unitX = dx / length;
-            double unitY = dy / length;
-            
-            // Arrow size based on zoom level - improved for ultra-high zoom
-            double arrowSize = Math.min(15, Math.max(3, scale / 10000));
-            if (scale > 100000) {
-                arrowSize = Math.min(25, scale / 50000); // Larger arrows for ultra-high zoom
-            }
-            
-            // Position arrow at 70% along the line
-            double arrowX = start.x + dx * 0.7;
-            double arrowY = start.y + dy * 0.7;
-            
-            // Calculate arrow head points
-            double angle = Math.PI / 6; // 30 degrees
-            double arrowX1 = arrowX - arrowSize * (unitX * Math.cos(angle) - unitY * Math.sin(angle));
-            double arrowY1 = arrowY - arrowSize * (unitX * Math.sin(angle) + unitY * Math.cos(angle));
-            double arrowX2 = arrowX - arrowSize * (unitX * Math.cos(-angle) - unitY * Math.sin(-angle));
-            double arrowY2 = arrowY - arrowSize * (unitX * Math.sin(-angle) + unitY * Math.cos(-angle));
-            
-            // Draw arrow head with thickness scaled to zoom level
-            float arrowThickness = Math.max(0.8f, (float)(scale / 100000));
-            if (scale > 200000) {
-                arrowThickness = Math.max(1.5f, (float)(scale / 200000)); // Thicker arrows for ultra-high zoom
-            }
-            g2d.setStroke(new BasicStroke(arrowThickness));
-            g2d.drawLine((int)arrowX, (int)arrowY, (int)arrowX1, (int)arrowY1);
-            g2d.drawLine((int)arrowX, (int)arrowY, (int)arrowX2, (int)arrowY2);
-        }
-        
-        private void drawRoute(Graphics2D g2d, List<Integer> route) {
-            g2d.setColor(SELECTED_ROUTE_COLOR);
-            
-            // Scale route line thickness with zoom level
-            float routeThickness = Math.max(3.0f, (float)(scale / 20000));
-            if (scale > 100000) {
-                routeThickness = Math.max(5.0f, (float)(scale / 50000)); // Thicker routes for ultra-high zoom
-            }
-            g2d.setStroke(new BasicStroke(routeThickness));
-            
-            for (int i = 0; i < route.size() - 1; i++) {
-                Point2D.Double start = coordToScreen(idToCoordData.get(route.get(i)));
-                Point2D.Double end = coordToScreen(idToCoordData.get(route.get(i + 1)));
-                
-                if (start != null && end != null) {
-                    g2d.drawLine((int)start.x, (int)start.y, (int)end.x, (int)end.y);
-                }
-            }
-        }
-        
-        private void drawSelectedNodes(Graphics2D g2d) {
-            // Calculate node size based on zoom level for better visibility
-            int selectedNodeSize = Math.max(8, Math.min(25, (int)(scale / 4000)));
-            if (scale > 100000) {
-                selectedNodeSize = Math.max(15, Math.min(40, (int)(scale / 15000))); // Larger for ultra-high zoom
-            }
-            
-            // Draw origin node
-            if (selectedOrigin != null) {
-                Point2D.Double pos = coordToScreen(idToCoordData.get(selectedOrigin));
-                if (pos != null) {
-                    g2d.setColor(ORIGIN_COLOR);
-                    g2d.fillOval((int)pos.x - selectedNodeSize/2, (int)pos.y - selectedNodeSize/2, selectedNodeSize, selectedNodeSize);
-                    g2d.setColor(Color.BLACK);
-                    g2d.drawOval((int)pos.x - selectedNodeSize/2, (int)pos.y - selectedNodeSize/2, selectedNodeSize, selectedNodeSize);
-                    
-                    // Scale text size with zoom
-                    int fontSize = Math.max(10, Math.min(18, (int)(scale / 10000)));
-                    g2d.setFont(new Font("Arial", Font.BOLD, fontSize));
-                    g2d.drawString("Origin", (int)pos.x + selectedNodeSize/2 + 5, (int)pos.y - selectedNodeSize/2 - 5);
-                }
-            }
-            
-            // Draw destination node
-            if (selectedDestination != null) {
-                Point2D.Double pos = coordToScreen(idToCoordData.get(selectedDestination));
-                if (pos != null) {
-                    g2d.setColor(DESTINATION_COLOR);
-                    g2d.fillOval((int)pos.x - selectedNodeSize/2, (int)pos.y - selectedNodeSize/2, selectedNodeSize, selectedNodeSize);
-                    g2d.setColor(Color.BLACK);
-                    g2d.drawOval((int)pos.x - selectedNodeSize/2, (int)pos.y - selectedNodeSize/2, selectedNodeSize, selectedNodeSize);
-                    
-                    // Scale text size with zoom
-                    int fontSize = Math.max(10, Math.min(18, (int)(scale / 10000)));
-                    g2d.setFont(new Font("Arial", Font.BOLD, fontSize));
-                    g2d.drawString("Destination", (int)pos.x + selectedNodeSize/2 + 5, (int)pos.y - selectedNodeSize/2 - 5);
-                }
-            }
-        }
-        
-        private void drawLegend(Graphics2D g2d) {
-            g2d.setColor(Color.BLACK);
-            g2d.setFont(new Font("Arial", Font.PLAIN, 12));
-            
-            int x = 10;
-            int y = getHeight() - 120;
-            
-            g2d.drawString("Zoom: " + String.format("%.0f", scale) + " (Range: 50 - 1,000,000)", x, y);
-            g2d.drawString("Nodes: " + (graphData != null ? graphData.length : 0), x, y + 15);
-            
-            // Node visibility info
-            if (scale >= 500) {
-                g2d.drawString("o White circles = Available nodes", x, y + 30);
-                g2d.drawString("* Green = Origin, Blue = Destination", x, y + 45);
-            } else {
-                g2d.drawString("Zoom in more to see individual nodes", x, y + 30);
-            }
-            
-            g2d.drawString("Mouse: wheel=zoom, drag=pan, click=select", x, y + 60);
-            
-            if (selectedOrigin != null || selectedDestination != null) {
-                y += 75;
-                if (selectedOrigin == null) {
-                    g2d.drawString("Click a node to select origin", x, y);
-                } else if (selectedDestination == null) {
-                    g2d.drawString("Click another node to select destination", x, y);
-                } else {
-                    g2d.drawString("Press 'Find Route' to calculate path", x, y);
-                }
-            }
-        }
-        
-        private Point2D.Double coordToScreen(String coord) {
-            if (coord == null) return null;
-            
-            String[] parts = coord.split(" ");
-            if (parts.length != 2) return null;
-            
-            try {
-                double lon = Double.parseDouble(parts[0]);
-                double lat = Double.parseDouble(parts[1]);
-                
-                // Filter out coordinates outside Buenos Aires area (same bounds as calculateMapBounds)
-                if (lon < -58.7 || lon > -58.3 || lat < -34.8 || lat > -34.4) {
-                    return null; // Don't render coordinates outside Buenos Aires
-                }
-                
-                // Simple coordinate transformation
-                double x = (lon - minLon) * scale + offsetX;
-                double y = (maxLat - lat) * scale + offsetY; // Y is inverted for screen coords
-                
-                return new Point2D.Double(x, y);
-            } catch (NumberFormatException e) {
-                return null;
-            }
-        }
-        
-        private Integer screenToNodeId(double screenX, double screenY) {
-            double threshold = 10.0; // pixels
-            Integer nearestNode = null;
-            double minDistance = threshold;
-            
-            for (Map.Entry<Integer, String> entry : idToCoordData.entrySet()) {
-                Point2D.Double pos = coordToScreen(entry.getValue());
-                if (pos != null) {
-                    double distance = Math.sqrt(Math.pow(pos.x - screenX, 2) + Math.pow(pos.y - screenY, 2));
-                    if (distance < minDistance) {
-                        minDistance = distance;
-                        nearestNode = entry.getKey();
-                    }
-                }
-            }
-            
-            return nearestNode;
-        }
-        
-        private void handleMapClick(double x, double y) {
-            Integer nodeId = screenToNodeId(x, y);
-            
-            if (nodeId != null) {
-                if (selectedOrigin == null) {
-                    selectedOrigin = nodeId;
-                    statusLabel.setText("Origin selected: Node " + nodeId + ". Click another node for destination.");
-                } else if (selectedDestination == null && !nodeId.equals(selectedOrigin)) {
-                    selectedDestination = nodeId;
-                    statusLabel.setText("Destination selected: Node " + nodeId + ". Press 'Find Route' to calculate path.");
-                    findRouteButton.setEnabled(true);
-                } else {
-                    // Reset and start over
-                    selectedOrigin = nodeId;
-                    selectedDestination = null;
-                    currentRoute.clear();
-                    statusLabel.setText("Origin selected: Node " + nodeId + ". Click another node for destination.");
-                    findRouteButton.setEnabled(false);
-                }
-                
-                repaint();
-            }
-        }
-        
-        private void showNodeInfo(double x, double y) {
-            Integer nodeId = screenToNodeId(x, y);
-            
-            if (nodeId != null && nodeId != lastHoveredNode) {
-                Node node = graphData[nodeId];
-                String coord = idToCoordData.get(nodeId);
-                String info = String.format("Node %d: %s\nOut edges: %d, In edges: %d", 
-                                           nodeId, coord, node.outEdges.size(), node.inEdges.size());
-                
-                setToolTipText(info);
-                lastHoveredNode = nodeId;
-            } else if (nodeId == null) {
-                setToolTipText(null);
-                lastHoveredNode = null;
-            }
-        }
-        
-        private Integer lastHoveredNode = null;
-        
-        private void drawAllNodes(Graphics2D g2d) {
-            // Only show nodes if we're zoomed in enough for them to be visible and useful
-            if (scale < 500) {
-                return; // Skip drawing nodes at low zoom levels to avoid clutter
-            }
-            
-            // Calculate appropriate node size based on zoom level - improved for ultra-high zoom
-            int nodeSize = Math.max(2, Math.min(20, (int)(scale / 5000)));
-            if (scale > 100000) {
-                nodeSize = Math.max(10, Math.min(30, (int)(scale / 20000))); // Larger nodes for ultra-high zoom
-            }
-            
-            g2d.setColor(Color.WHITE);
-            
-            // Draw all nodes that have coordinates
-            for (Integer nodeId : idToCoordData.keySet()) {
-                // Skip if this node is currently selected (will be drawn highlighted later)
-                if (nodeId.equals(selectedOrigin) || nodeId.equals(selectedDestination)) {
-                    continue;
-                }
-                
-                Point2D.Double pos = coordToScreen(idToCoordData.get(nodeId));
-                if (pos != null) {
-                    // Check if the node is visible in the current view
-                    if (pos.x >= -nodeSize && pos.x <= getWidth() + nodeSize &&
-                        pos.y >= -nodeSize && pos.y <= getHeight() + nodeSize) {
-                        
-                        // Draw white circle with black border
-                        g2d.fillOval((int)pos.x - nodeSize/2, (int)pos.y - nodeSize/2, nodeSize, nodeSize);
-                        g2d.setColor(Color.BLACK);
-                        g2d.drawOval((int)pos.x - nodeSize/2, (int)pos.y - nodeSize/2, nodeSize, nodeSize);
-                        g2d.setColor(Color.WHITE);
-                    }
-                }
-            }
-        }
-    }
-    
+      
     // GUI initialization and methods
     public void initializeGUI() {
         SwingUtilities.invokeLater(() -> {
@@ -882,127 +326,138 @@ public class Test {
         mainFrame = new JFrame("Buenos Aires Street Network - Route Planner");
         mainFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         mainFrame.setLayout(new BorderLayout());
-        
-        // Create map panel
-        mapPanel = new MapPanel();
-        mapScrollPane = new JScrollPane(mapPanel);
-        mapScrollPane.setPreferredSize(new Dimension(800, 600));
-        mapScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
-        mapScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-        
-        // Create control panel
-        JPanel controlPanel = new JPanel(new BorderLayout());
-        
-        // Status and buttons
-        JPanel topPanel = new JPanel(new FlowLayout());
+
+        // === Instancia de componentes ===
         statusLabel = new JLabel("Click on the map to select origin and destination nodes");
         findRouteButton = new JButton("Find Route");
         clearButton = new JButton("Clear Selection");
         showGuiButton = new JButton("Show Console");
-        
+
+        mapPanel = new MapPanel();
+        mapPanel.statusLabel = statusLabel;
+        mapPanel.findRouteButton = findRouteButton;
+
+        // Si ya tienes cargado el grafo, pásalo al panel
+        mapPanel.graphData = this.graphData;
+        mapPanel.idToCoordData = this.idToCoordData;
+
+        // Scroll para el mapa
+        mapScrollPane = new JScrollPane(mapPanel);
+        mapScrollPane.setPreferredSize(new Dimension(800, 600));
+        mapScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        mapScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+
+        // Panel de control (abajo)
+        JPanel controlPanel = new JPanel(new BorderLayout());
+
+        // Panel superior con botones
+        JPanel topPanel = new JPanel(new FlowLayout());
         findRouteButton.setEnabled(false);
-        
+
         findRouteButton.addActionListener(e -> calculateRoute());
         clearButton.addActionListener(e -> clearSelection());
         showGuiButton.addActionListener(e -> toggleConsole());
-        
+
         topPanel.add(statusLabel);
         topPanel.add(findRouteButton);
         topPanel.add(clearButton);
         topPanel.add(showGuiButton);
-        
-        // Info area
+
+        // Área de información
         infoArea = new JTextArea(8, 40);
         infoArea.setEditable(false);
         infoArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
         JScrollPane infoScrollPane = new JScrollPane(infoArea);
         infoScrollPane.setBorder(BorderFactory.createTitledBorder("Route Information"));
-        
+
+        // Armar panel de control
         controlPanel.add(topPanel, BorderLayout.NORTH);
         controlPanel.add(infoScrollPane, BorderLayout.CENTER);
-        
-        // Add components to main frame
+
+        // Agregar todo al frame
         mainFrame.add(mapScrollPane, BorderLayout.CENTER);
         mainFrame.add(controlPanel, BorderLayout.SOUTH);
-        
-        // Set up the frame
-        mainFrame.setExtendedState(JFrame.MAXIMIZED_BOTH); // Open in fullscreen
-        mainFrame.setSize(1200, 800); // Fallback size if maximized doesn't work
+
+        // Configuración visual del frame
+        mainFrame.setExtendedState(JFrame.MAXIMIZED_BOTH);
+        mainFrame.setSize(1200, 800);
         mainFrame.setLocationRelativeTo(null);
         mainFrame.setVisible(true);
-        
-        // Initial info
-        updateInfoArea("GUI initialized. Map data loaded with " + 
-                      (graphData != null ? graphData.length : 0) + " nodes.\n" +
-                      "Click on the map to select origin and destination for route planning.");
+
+        // Mensaje inicial
+        updateInfoArea("GUI initialized. Map data loaded with " +
+                (graphData != null ? graphData.length : 0) + " nodes.\n" +
+                "Click on the map to select origin and destination for route planning.");
     }
+
     
     private void calculateRoute() {
-        if (selectedOrigin == null || selectedDestination == null) {
+        System.out.println("HOLA ");
+        if (mapPanel.selectedOrigin == null || mapPanel.selectedDestination == null) {
             updateInfoArea("Please select both origin and destination nodes.");
             return;
         }
-        
-        updateInfoArea("Calculating route from Node " + selectedOrigin + " to Node " + selectedDestination + "...");
-        
-        // Reset distance data for new query
-        for (Node node : graphData) {
+        System.out.println("HOLA1  ");
+        updateInfoArea("Calculating route from Node " + mapPanel.selectedOrigin + " to Node " + mapPanel.selectedDestination + "...");
+
+        for (Node node : mapPanel.graphData) {
             node.distance = new Distance();
         }
-        
-        // Calculate route using bidirectional search
+        System.out.println("HOLA2");
+        // Ejecutar búsqueda bidireccional
         BidirectionalSearch.PathResult result = bidirectionalSearchData.computeShortestPath(
-            selectedOrigin, selectedDestination, (int)(System.currentTimeMillis() % 1000));
-        
+            mapPanel.selectedOrigin, mapPanel.selectedDestination, (int)(System.currentTimeMillis() % 1000)
+        );
+
         if (result.distance == -1) {
             updateInfoArea("No route found between the selected nodes.\n" +
-                          "This could be due to:\n" +
-                          "- Nodes are in different connected components\n" +
-                          "- Street directions prevent connection\n" +
-                          "- Graph preprocessing issue");
-            currentRoute.clear();
+                "- Nodes are in different connected components\n" +
+                "- Street directions prevent connection\n" +
+                "- Graph preprocessing issue");
+            mapPanel.currentRoute.clear();
         } else {
-            // Reconstruct path
-            currentRoute = bidirectionalSearchData.reconstructPath(
-                selectedOrigin, selectedDestination, result.meetingNode);
-            
+            mapPanel.currentRoute.clear();
+            mapPanel.currentRoute.addAll(bidirectionalSearchData.reconstructPath(
+                mapPanel.selectedOrigin, mapPanel.selectedDestination, result.meetingNode));
+
+            // Mostrar detalles
             StringBuilder routeInfo = new StringBuilder();
             routeInfo.append("Route found!\n");
             routeInfo.append("Distance: ").append(result.distance).append(" meters\n");
-            routeInfo.append("Number of segments: ").append(currentRoute.size() - 1).append("\n\n");
-            
-            if (currentRoute.size() > 1) {
+            routeInfo.append("Number of segments: ").append(mapPanel.currentRoute.size() - 1).append("\n\n");
+
+            if (mapPanel.currentRoute.size() > 1) {
                 routeInfo.append("Route details:\n");
-                for (int i = 0; i < Math.min(currentRoute.size() - 1, 10); i++) {
-                    int from = currentRoute.get(i);
-                    int to = currentRoute.get(i + 1);
-                    
-                    // Find street name
+                for (int i = 0; i < Math.min(mapPanel.currentRoute.size() - 1, 10); i++) {
+                    int from = mapPanel.currentRoute.get(i);
+                    int to = mapPanel.currentRoute.get(i + 1);
+
                     String streetName = "Unknown";
-                    for (Edge edge : graphData[from].outEdges) {
+                    for (Edge edge : mapPanel.graphData[from].outEdges) {
                         if (edge.to == to) {
                             streetName = edge.streetName;
                             break;
                         }
                     }
-                    
-                    routeInfo.append(String.format("%d. Node %d -> %d via %s\n", 
-                                                  i + 1, from, to, streetName));
+
+                    routeInfo.append(String.format("%d. Node %d -> %d via %s\n",
+                        i + 1, from, to, streetName));
                 }
-                
-                if (currentRoute.size() > 11) {
-                    routeInfo.append("... and ").append(currentRoute.size() - 11).append(" more segments\n");
+
+                if (mapPanel.currentRoute.size() > 11) {
+                    routeInfo.append("... and ").append(mapPanel.currentRoute.size() - 11).append(" more segments\n");
                 }
-                
-                routeInfo.append("\nOrigin: ").append(idToCoordData.get(selectedOrigin)).append("\n");
-                routeInfo.append("Destination: ").append(idToCoordData.get(selectedDestination));
+
+                routeInfo.append("\nOrigin: ").append(mapPanel.idToCoordData.get(mapPanel.selectedOrigin)).append("\n");
+                routeInfo.append("Destination: ").append(mapPanel.idToCoordData.get(mapPanel.selectedDestination));
             }
-            
+
             updateInfoArea(routeInfo.toString());
         }
-        
+
         mapPanel.repaint();
     }
+
     
     private void clearSelection() {
         selectedOrigin = null;
