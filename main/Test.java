@@ -381,20 +381,22 @@ public class Test {
             updateInfoArea("Please select both origin and destination nodes.");
             return;
         }
-        
-        Algorithm selectedAlgorithm = (Algorithm) algorithmSelector.getSelectedItem();
-        updateInfoArea("Calculating route using " + selectedAlgorithm + " from Node " + 
-                      mapPanel.selectedOrigin + " to Node " + mapPanel.selectedDestination + "...");
 
-        // Reset distance data for new query
+        Algorithm selectedAlgorithm = (Algorithm) algorithmSelector.getSelectedItem();
+        updateInfoArea("Calculating route using " + selectedAlgorithm + " from Node " +
+                    mapPanel.selectedOrigin + " to Node " + mapPanel.selectedDestination + "...");
+
         for (Node node : mapPanel.graphData) {
             node.distance = new Distance();
         }
-        
+
         List<Integer> path = null;
         long distance = -1;
-        
+        long durationMs = -1;
+
         try {
+            long startTime = System.nanoTime(); // INICIO
+
             switch (selectedAlgorithm) {
                 case CCH:
                     BidirectionalSearch.PathResult chResult = bidirectionalSearchData.computeShortestPathEnhanced(
@@ -406,22 +408,27 @@ public class Test {
                         distance = chResult.distance;
                     }
                     break;
+
                 case ASTAR:
                     AStarSearch aStar = new AStarSearch(mapPanel.graphData, mapPanel.idToCoordData);
                     AStarSearch.Result aStarResult = aStar.compute(mapPanel.selectedOrigin, mapPanel.selectedDestination);
                     path = aStarResult.path;
                     distance = aStarResult.distance;
                     break;
+
                 case ALT:
-                    // Use some landmarks - you can make these more sophisticated
-                    List<Integer> landmarks = Arrays.asList(0, Math.min(10, mapPanel.graphData.length-1), 
-                                                           Math.min(50, mapPanel.graphData.length-1));
+                    List<Integer> landmarks = Arrays.asList(0, Math.min(10, mapPanel.graphData.length-1),
+                                                        Math.min(50, mapPanel.graphData.length-1));
                     ALTSearch alt = new ALTSearch(mapPanel.graphData, mapPanel.idToCoordData, landmarks);
                     ALTSearch.Result altResult = alt.compute(mapPanel.selectedOrigin, mapPanel.selectedDestination);
                     path = altResult.path;
                     distance = altResult.distance;
                     break;
             }
+
+            long endTime = System.nanoTime(); // FIN
+            durationMs = (endTime - startTime) / 1_000_000;
+
         } catch (Exception e) {
             updateInfoArea("Error calculating route with " + selectedAlgorithm + ": " + e.getMessage());
             return;
@@ -437,28 +444,24 @@ public class Test {
             mapPanel.currentRoute.clear();
             mapPanel.currentRoute.addAll(path);
 
-            // Calcular tiempo estimado según el perfil
+            // Tiempo estimado según perfil
             VehicleProfile selectedProfile = (VehicleProfile) profileSelector.getSelectedItem();
-            double speedMps = 8.33; // Default: Vehículo
+            double speedMps;
             switch (selectedProfile) {
-                case BICICLETA:
-                    speedMps = 4.16;
-                    break;
-                case PEATONAL:
-                    speedMps = 1.39;
-                    break;
+                case BICICLETA: speedMps = 4.16; break;
+                case PEATONAL:  speedMps = 1.39; break;
                 case VEHICULOS:
-                default:
-                    speedMps = 8.33;
-                    break;
+                default:        speedMps = 8.33; break;
             }
+
             double timeSeconds = (distance > 0 && speedMps > 0) ? (distance / speedMps) : 0;
             int minutes = (int) (timeSeconds / 60);
             int seconds = (int) (timeSeconds % 60);
 
-            // Show details
+            // Mostrar detalles
             StringBuilder routeInfo = new StringBuilder();
             routeInfo.append("Route found using ").append(selectedAlgorithm).append("!\n");
+            routeInfo.append("Time taken: ").append(durationMs).append(" ms\n");
             routeInfo.append("Distance: ").append(distance).append(" meters\n");
             routeInfo.append("Estimated time: ").append(minutes).append(" min ").append(seconds).append(" sec\n");
             routeInfo.append("Number of segments: ").append(path.size() - 1).append("\n\n");
@@ -494,6 +497,7 @@ public class Test {
 
         mapPanel.repaint();
     }
+
 
     
     private void clearSelection() {
