@@ -6,6 +6,10 @@ import models.*;
 public class ContractionHierarchies {
     public Node[] graph;
     
+    // CCH-related fields
+    private VehicleProfile currentProfile = VehicleProfile.VEHICULOS;
+    private boolean weightsCustomized = false;
+    
     // OPTIMIZACIÓN SEGURA 1: Tracking de nodos en cola sin queue.remove()
     private boolean[] inQueue;
     private long[] lastImportanceUpdate;
@@ -95,7 +99,7 @@ public class ContractionHierarchies {
                 if (graph[outEdge.to].contracted || inEdge.from == outEdge.to || shortcutCount >= maxShortcuts) continue;
                 
                 // Check if this is the shortest path or if there's a witness path
-                long directDist = inEdge.weight + outEdge.weight;
+                long directDist = (long)inEdge.getCustomWeight() + (long)outEdge.getCustomWeight();
                 if (isShortestPathOptimized(inEdge.from, outEdge.to, directDist, node.id)) {
                     // Create shortcut with combined street name
                     String combinedStreet = inEdge.streetName + " -> " + outEdge.streetName;
@@ -149,7 +153,7 @@ public class ContractionHierarchies {
                 // Skip edges to the node being contracted
                 if (edge.to == viaNode || graph[edge.to].contracted) continue;
                 
-                long newDist = current.distance + edge.weight;
+                long newDist = current.distance + (long)edge.getCustomWeight();
                 if (newDist < distances[edge.to] && newDist < shortcutDist) {
                     distances[edge.to] = newDist;
                     pq.add(new NodeDistance(edge.to, newDist));
@@ -208,5 +212,80 @@ public class ContractionHierarchies {
             this.nodeId = nodeId;
             this.distance = distance;
         }
+    }
+    
+    // ===================== CCH METHODS =====================
+    
+    /**
+     * Customizes weights for a specific vehicle profile (CCH Phase 2)
+     * @param profile The vehicle profile to customize for
+     */
+    public void customizeWeights(VehicleProfile profile) {
+        this.currentProfile = profile;
+        this.weightsCustomized = true;
+        
+        System.out.println("Customizing weights for profile: " + profile);
+        long startTime = System.currentTimeMillis();
+        
+        // Update all edge weights based on the profile
+        int edgeCount = 0;
+        for (Node node : graph) {
+            if (node == null) continue;
+            
+            for (Edge edge : node.outEdges) {
+                double newWeight = EdgeWeightCustomizer.calculateWeight(edge, profile);
+                edge.setCustomWeight(newWeight);
+                edgeCount++;
+            }
+        }
+        
+        long endTime = System.currentTimeMillis();
+        System.out.println("Weight customization completed in " + (endTime - startTime) + "ms");
+        System.out.println("Updated " + edgeCount + " edges for profile: " + profile);
+    }
+    
+    /**
+     * Gets the current vehicle profile
+     * @return The current vehicle profile
+     */
+    public VehicleProfile getCurrentProfile() {
+        return currentProfile;
+    }
+    
+    /**
+     * Sets the vehicle profile and customizes weights accordingly
+     * @param profile The vehicle profile to set
+     */
+    public void setProfile(VehicleProfile profile) {
+        if (profile != null) {
+            System.out.println("Setting profile from " + this.currentProfile + " to " + profile);
+            customizeWeights(profile);
+        }
+    }
+    
+    /**
+     * Checks if weights have been customized
+     * @return True if weights are customized for a specific profile
+     */
+    public boolean isWeightsCustomized() {
+        return weightsCustomized;
+    }
+    
+    /**
+     * Resets to default weights (distance-based)
+     */
+    public void resetToDefaultWeights() {
+        this.currentProfile = VehicleProfile.VEHICULOS;
+        this.weightsCustomized = false;
+        
+        for (Node node : graph) {
+            if (node == null) continue;
+            
+            for (Edge edge : node.outEdges) {
+                edge.setCustomWeight(edge.getDistance());
+            }
+        }
+        
+        System.out.println("Reset to default distance-based weights");
     }
 }

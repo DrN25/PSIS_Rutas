@@ -1,6 +1,6 @@
 @echo off
-echo Compilando Test.java...
-javac main/Test.java
+echo Compilando todos los archivos Java...
+javac -cp . main/Test.java algorithms/*.java models/*.java gui/*.java loader/*.java graph/*.java utils/*.java
 
 if %errorlevel% neq 0 (
     echo Error en la compilacion
@@ -11,7 +11,7 @@ if %errorlevel% neq 0 (
 echo Compilacion exitosa. Ejecutando programa...
 echo.
 
-echo 0 | java main/Test
+java -cp . main.Test
 
 echo.
 echo Programa terminado.

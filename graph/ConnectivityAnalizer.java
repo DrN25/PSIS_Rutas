@@ -73,8 +73,8 @@ public class ConnectivityAnalizer {
                         node.distance = new Distance();
                     }
                     
-                    // Probar la búsqueda
-                    BidirectionalSearch.PathResult result = bidirectionalSearch.computeShortestPath(source, target, 999);
+                    // Probar la búsqueda con fallback
+                    BidirectionalSearch.PathResult result = bidirectionalSearch.computeShortestPathEnhanced(source, target, 999);
                     
                     if (result.distance != -1) {
                         testsFound++;

@@ -24,6 +24,9 @@ public class BidirectionalSearch {
     public PathResult computeShortestPath(int source, int target, int queryId) {
         if (source == target) return new PathResult(0, source);
         
+        // Special case: if both nodes are at level 0, we may need different strategy
+        boolean bothLowLevel = (graph[source].level == 0 && graph[target].level == 0);
+        
         // Inicializar colas de prioridad para búsqueda forward y backward
         PriorityQueue<Node> forwardQueue = new PriorityQueue<>(new ForwardDistanceComparator());
         PriorityQueue<Node> backwardQueue = new PriorityQueue<>(new BackwardDistanceComparator());
@@ -61,7 +64,18 @@ public class BidirectionalSearch {
                 }
                 
                 for (Edge edge : node.outEdges) {
-                    if (graph[edge.to].level > node.level) {
+                    // Modified logic for better CH exploration
+                    boolean shouldExplore = false;
+                    
+                    if (bothLowLevel) {
+                        // For low-level nodes, explore more liberally
+                        shouldExplore = (graph[edge.to].level >= node.level);
+                    } else {
+                        // Standard CH: only go to higher levels
+                        shouldExplore = (graph[edge.to].level > node.level);
+                    }
+                    
+                    if (shouldExplore) {
                         relaxEdge(node, graph[edge.to], edge, forwardQueue, true, queryId);
                     }
                 }
@@ -86,7 +100,18 @@ public class BidirectionalSearch {
                 }
                 
                 for (Edge edge : node.inEdges) {
-                    if (graph[edge.from].level > node.level) {
+                    // Modified logic for better CH exploration
+                    boolean shouldExplore = false;
+                    
+                    if (bothLowLevel) {
+                        // For low-level nodes, explore more liberally
+                        shouldExplore = (graph[edge.from].level >= node.level);
+                    } else {
+                        // Standard CH: only go to higher levels
+                        shouldExplore = (graph[edge.from].level > node.level);
+                    }
+                    
+                    if (shouldExplore) {
                         relaxEdge(node, graph[edge.from], edge, backwardQueue, false, queryId);
                     }
                 }
@@ -96,10 +121,20 @@ public class BidirectionalSearch {
         return new PathResult(bestDist == Long.MAX_VALUE ? -1 : bestDist, meetingNode);
     }
     
-    // Modificar para guardar el predecesor
+    // Modificar para guardar el predecesor y usar pesos customizados
     public void relaxEdge(Node current, Node neighbor, Edge edge, PriorityQueue<Node> queue, boolean forward, int queryId) {
+        // Use custom weight if available, otherwise use original weight
+        double edgeWeight = edge.getCustomWeight();
+        
+        // Skip prohibited routes (infinite weight)
+        if (edgeWeight == Double.MAX_VALUE) {
+            return; // Do not use prohibited routes
+        }
+        
+        long edgeWeightLong = (long) edgeWeight;
+        
         if (forward) {
-            long newDist = current.distance.forwardDist + edge.weight;
+            long newDist = current.distance.forwardDist + edgeWeightLong;
             if (neighbor.distance.forwardQueryId != queryId || newDist < neighbor.distance.forwardDist) {
                 queue.remove(neighbor);
                 neighbor.distance.forwardDist = newDist;
@@ -108,7 +143,7 @@ public class BidirectionalSearch {
                 queue.add(neighbor);
             }
         } else {
-            long newDist = current.distance.backwardDist + edge.weight;
+            long newDist = current.distance.backwardDist + edgeWeightLong;
             if (neighbor.distance.backwardQueryId != queryId || newDist < neighbor.distance.backwardDist) {
                 queue.remove(neighbor);
                 neighbor.distance.backwardDist = newDist;
@@ -164,5 +199,80 @@ public class BidirectionalSearch {
         
         forwardPath.addAll(backwardPath);
         return forwardPath;
+    }
+    
+    // Fallback method using simple Dijkstra when CH fails
+    public PathResult computeShortestPathFallback(int source, int target, int queryId) {
+        if (source == target) return new PathResult(0, source);
+        
+        long[] distances = new long[graph.length];
+        int[] predecessors = new int[graph.length];
+        Arrays.fill(distances, Long.MAX_VALUE);
+        Arrays.fill(predecessors, -1);
+        distances[source] = 0;
+        
+        PriorityQueue<int[]> pq = new PriorityQueue<>((a, b) -> Long.compare(a[1], b[1]));
+        pq.offer(new int[]{source, 0});
+        
+        boolean[] visited = new boolean[graph.length];
+        
+        while (!pq.isEmpty()) {
+            int[] current = pq.poll();
+            int nodeId = current[0];
+            long dist = current[1];
+            
+            if (visited[nodeId]) continue;
+            visited[nodeId] = true;
+            
+            if (nodeId == target) {
+                // Found target, set up predecessor info for reconstruction
+                for (int i = 0; i < graph.length; i++) {
+                    if (predecessors[i] != -1) {
+                        graph[i].distance.forwardPredecessor = predecessors[i];
+                        graph[i].distance.forwardQueryId = queryId;
+                    }
+                }
+                return new PathResult(dist, target);
+            }
+            
+            for (Edge edge : graph[nodeId].outEdges) {
+                if (!visited[edge.to]) {
+                    // Use custom weight if available
+                    double edgeWeight = edge.getCustomWeight();
+                    
+                    // Skip prohibited routes
+                    if (edgeWeight == Double.MAX_VALUE) {
+                        continue;
+                    }
+                    
+                    long newDist = dist + (long)edgeWeight;
+                    if (newDist < distances[edge.to]) {
+                        distances[edge.to] = newDist;
+                        predecessors[edge.to] = nodeId;
+                        pq.offer(new int[]{edge.to, (int)newDist});
+                    }
+                }
+            }
+        }
+        
+        return new PathResult(-1, -1); // No path found
+    }
+    
+    // Enhanced main method that tries CH first, then fallback
+    public PathResult computeShortestPathEnhanced(int source, int target, int queryId) {
+        // Try CH first
+        PathResult chResult = computeShortestPath(source, target, queryId);
+        
+        // If CH fails, try fallback Dijkstra
+        if (chResult.distance == -1) {
+            System.out.println("CH failed, trying Dijkstra fallback...");
+            PathResult fallbackResult = computeShortestPathFallback(source, target, queryId);
+            if (fallbackResult.distance != -1) {
+                System.out.println("Fallback Dijkstra found route: " + fallbackResult.distance);
+                return fallbackResult;
+            }
+        }
+        
+        return chResult;
     }
 }

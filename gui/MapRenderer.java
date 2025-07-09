@@ -5,6 +5,8 @@ import java.awt.geom.*;
 import java.util.List;
 import models.Edge;
 import models.Node;
+import models.VehicleProfile;
+import models.EdgeWeightCustomizer;
 
 public class MapRenderer {
     private final MapPanel panel;
@@ -59,11 +61,14 @@ public class MapRenderer {
         float baseThickness = Math.max(1.0f, (float)(scale / 50000));
         if (scale > 100000) baseThickness = Math.max(2.0f, (float)(scale / 100000));
 
+        // Determine edge color based on profile suitability
+        Color edgeColor = getEdgeColorForProfile(edge, panel.currentProfile);
+        
         if (isBidirectional) {
-            g2d.setColor(MapPanel.STREET_COLOR);
+            g2d.setColor(edgeColor);
             g2d.setStroke(new BasicStroke(baseThickness * 1.5f));
         } else {
-            g2d.setColor(MapPanel.STREET_COLOR.darker());
+            g2d.setColor(edgeColor.darker());
             g2d.setStroke(new BasicStroke(baseThickness));
         }
 
@@ -71,6 +76,44 @@ public class MapRenderer {
 
         if (!isBidirectional && scale > 2000) {
             drawDirectionArrow(g2d, start, end);
+        }
+    }
+    
+    /**
+     * Determines the color of an edge based on its suitability for the current profile
+     */
+    private Color getEdgeColorForProfile(Edge edge, VehicleProfile profile) {
+        // Calculate custom weight for this edge with the current profile
+        double defaultWeight = edge.getDistance();
+        double profileWeight = EdgeWeightCustomizer.calculateWeight(edge, profile);
+        
+        // Debug: Print some sample edges for testing
+        if (Math.random() < 0.001) { // Print 0.1% of edges for debugging
+            System.out.println("DEBUG: Edge " + edge.from + "->" + edge.to + 
+                " | Profile: " + profile + 
+                " | Default: " + defaultWeight + 
+                " | Profile: " + profileWeight +
+                " | Sentido: " + edge.getSentido() +
+                " | TipoC: " + edge.getTipoC() +
+                " | RedJerarq: " + edge.getRedJerarq() +
+                " | Bicisenda: " + edge.getBicisenda());
+        }
+        
+        if (profileWeight == Double.POSITIVE_INFINITY || profileWeight == Double.MAX_VALUE) {
+            // Completely prohibited - dark red
+            return new Color(150, 0, 0); // Dark red
+        } else if (profileWeight > defaultWeight * 5.0) {
+            // Heavily discouraged - blue
+            return new Color(0, 100, 200); // Blue
+        } else if (profileWeight > defaultWeight * 2.0) {
+            // Discouraged - blue
+            return new Color(0, 100, 200); // Blue
+        } else if (profileWeight < defaultWeight * 0.9) {
+            // Preferred route - green
+            return new Color(0, 150, 0); // Green
+        } else {
+            // Normal route - standard gray
+            return MapPanel.STREET_COLOR; // Gray
         }
     }
 
@@ -154,22 +197,57 @@ public class MapRenderer {
         g2d.setFont(new Font("Arial", Font.PLAIN, 12));
 
         int x = 10;
-        int y = panel.getHeight() - 120;
+        int y = panel.getHeight() - 160;
 
         g2d.drawString("Zoom: " + String.format("%.0f", panel.scale) + " (Range: 50 - 1,000,000)", x, y);
         g2d.drawString("Nodes: " + (panel.graphData != null ? panel.graphData.length : 0), x, y + 15);
+        g2d.drawString("Profile: " + panel.currentProfile.toString(), x, y + 30);
 
         if (panel.scale >= 500) {
-            g2d.drawString("o White circles = Available nodes", x, y + 30);
-            g2d.drawString("* Green = Origin, Blue = Destination", x, y + 45);
+            g2d.drawString("o White circles = Available nodes", x, y + 45);
+            g2d.drawString("* Green = Origin, Blue = Destination", x, y + 60);
         } else {
-            g2d.drawString("Zoom in more to see individual nodes", x, y + 30);
+            g2d.drawString("Zoom in more to see individual nodes", x, y + 45);
         }
 
-        g2d.drawString("Mouse: wheel=zoom, drag=pan, click=select", x, y + 60);
+        // Profile-specific legend
+        y += 75;
+        g2d.drawString("Street Colors:", x, y);
+        
+        // Draw color samples with the new unified color scheme
+        Color preferredColor = new Color(0, 150, 0); // Green
+        Color normalColor = MapPanel.STREET_COLOR; // Gray
+        Color discouragedColor = new Color(0, 100, 200); // Blue
+        Color prohibitedColor = new Color(150, 0, 0); // Dark red
+        
+        int lineY = y + 10;
+        g2d.setStroke(new BasicStroke(3));
+        
+        g2d.setColor(preferredColor);
+        g2d.drawLine(x, lineY, x + 20, lineY);
+        g2d.setColor(Color.BLACK);
+        g2d.drawString("Preferred", x + 25, lineY + 3);
+        
+        g2d.setColor(normalColor);
+        g2d.drawLine(x + 100, lineY, x + 120, lineY);
+        g2d.setColor(Color.BLACK);
+        g2d.drawString("Normal", x + 125, lineY + 3);
+        
+        lineY += 15;
+        g2d.setColor(discouragedColor);
+        g2d.drawLine(x, lineY, x + 20, lineY);
+        g2d.setColor(Color.BLACK);
+        g2d.drawString("Discouraged", x + 25, lineY + 3);
+        
+        g2d.setColor(prohibitedColor);
+        g2d.drawLine(x + 100, lineY, x + 120, lineY);
+        g2d.setColor(Color.BLACK);
+        g2d.drawString("Prohibited", x + 125, lineY + 3);
+
+        g2d.drawString("Mouse: wheel=zoom, drag=pan, click=select", x, y + 40);
 
         if (panel.selectedOrigin != null || panel.selectedDestination != null) {
-            y += 75;
+            y += 55;
             if (panel.selectedOrigin == null) {
                 g2d.drawString("Click a node to select origin", x, y);
             } else if (panel.selectedDestination == null) {
@@ -177,6 +255,19 @@ public class MapRenderer {
             } else {
                 g2d.drawString("Press 'Find Route' to calculate path", x, y);
             }
+        }
+    }
+    
+    private Color getProfilePreferredColor(VehicleProfile profile) {
+        switch (profile) {
+            case VEHICULOS:
+                return new Color(50, 50, 255); // Bright blue for vehicles
+            case BICICLETA:
+                return new Color(50, 255, 50); // Bright green for bicycles
+            case PEATONAL:
+                return new Color(255, 150, 50); // Bright orange for pedestrians
+            default:
+                return MapPanel.STREET_COLOR;
         }
     }
 

@@ -46,9 +46,27 @@ public class CSVRouteLoader {
                 street = fields[2].replace("\"", "").trim();
             }
 
+            // Extract CSV fields for CCH customization
+            String sentido = "";
+            String tipoC = "";
+            String redJerarq = "";
+            String bicisenda = "";
+            
+            if (fields.length > 11 && fields[11] != null) {
+                sentido = fields[11].replace("\"", "").trim().toUpperCase();
+            }
+            if (fields.length > 9 && fields[9] != null) {
+                tipoC = fields[9].replace("\"", "").trim().toUpperCase();
+            }
+            if (fields.length > 14 && fields[14] != null) {
+                redJerarq = fields[14].replace("\"", "").trim().toUpperCase();
+            }
+            if (fields.length > 13 && fields[13] != null) {
+                bicisenda = fields[13].replace("\"", "").trim();
+            }
+
             boolean isBidirectional = false;
             if (fields.length > 11 && fields[11] != null) {
-                String sentido = fields[11].replace("\"", "").trim().toUpperCase();
                 isBidirectional = sentido.equals("DOBLE");
             }
 
@@ -72,7 +90,8 @@ public class CSVRouteLoader {
             } catch (NumberFormatException ignored) {}
 
             long cost = (long) length;
-            routes.add(new Route(origin, destination, cost, street, isBidirectional));
+            routes.add(new Route(origin, destination, cost, street, isBidirectional,
+                                sentido, tipoC, redJerarq, bicisenda));
         }
         br.close();
 
@@ -82,13 +101,21 @@ public class CSVRouteLoader {
 
         int totalEdges = 0;
         for (Route route : routes) {
-            Edge forwardEdge = new Edge(route.origin, route.destination, route.cost, route.street);
+            // Get CSV fields for this route (we need to store them in Route first)
+            String routeSentido = route.sentido != null ? route.sentido : "";
+            String routeTipoC = route.tipoC != null ? route.tipoC : "";
+            String routeRedJerarq = route.redJerarq != null ? route.redJerarq : "";
+            String routeBicisenda = route.bicisenda != null ? route.bicisenda : "";
+            
+            Edge forwardEdge = new Edge(route.origin, route.destination, route.cost, route.street,
+                                      routeSentido, routeTipoC, routeRedJerarq, routeBicisenda);
             graph[route.origin].outEdges.add(forwardEdge);
             graph[route.destination].inEdges.add(forwardEdge);
             totalEdges++;
 
             if (route.isBidirectional) {
-                Edge backwardEdge = new Edge(route.destination, route.origin, route.cost, route.street);
+                Edge backwardEdge = new Edge(route.destination, route.origin, route.cost, route.street,
+                                           routeSentido, routeTipoC, routeRedJerarq, routeBicisenda);
                 graph[route.destination].outEdges.add(backwardEdge);
                 graph[route.origin].inEdges.add(backwardEdge);
                 totalEdges++;

@@ -2,13 +2,6 @@ package models;
 
 import java.util.ArrayList;
 
-/**
- * Basic class for representing a graph node with contraction hierarchies properties.
- * This class is used for road network graph representation with support for:
- * - Contraction Hierarchies preprocessing
- * - Bidirectional search queries
- * - Route planning algorithms
- */
 public class Node {
     public int id;
     public ArrayList<Edge> outEdges;

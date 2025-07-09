@@ -31,7 +31,7 @@ public class RouteDisplayer {
             node.distance = new Distance();
         }
         
-        BidirectionalSearch.PathResult result = bidirectionalSearch.computeShortestPath(sourceId, targetId, 999);
+        BidirectionalSearch.PathResult result = bidirectionalSearch.computeShortestPathEnhanced(sourceId, targetId, 999);
         System.out.println("[SEARCH] Busqueda Bidireccional: " + (result.distance == -1 ? "No route found" : result.distance + " metros"));
         
         if (result.distance != -1) {
