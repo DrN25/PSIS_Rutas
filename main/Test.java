@@ -1,6 +1,7 @@
 package main;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,6 +22,8 @@ public class Test {
     private MapPanel mapPanel;
     private JLabel statusLabel;
     private JButton findRouteButton;
+    private JButton findRouteAStarButton;
+    private JButton findRouteALTButton;
     private JButton clearButton;
     private JButton showGuiButton;
     private JTextArea infoArea;
@@ -306,64 +309,72 @@ public class Test {
         mainFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         mainFrame.setLayout(new BorderLayout());
 
-        // === Instancia de componentes ===
         statusLabel = new JLabel("Click on the map to select origin and destination nodes");
         findRouteButton = new JButton("Find Route");
+        findRouteAStarButton = new JButton("Find Route (A*)");
+        findRouteALTButton = new JButton("Find Route (ALT)");
         clearButton = new JButton("Clear Selection");
         showGuiButton = new JButton("Show Console");
 
         mapPanel = new MapPanel();
         mapPanel.statusLabel = statusLabel;
         mapPanel.findRouteButton = findRouteButton;
+        mapPanel.findRouteAStarButton = findRouteAStarButton;
+        mapPanel.findRouteALTButton = findRouteALTButton;
+        mapPanel.graphData = graphData;
+        mapPanel.idToCoordData = idToCoordData;
 
-        // Si ya tienes cargado el grafo, pásalo al panel
-        mapPanel.graphData = this.graphData;
-        mapPanel.idToCoordData = this.idToCoordData;
-
-        // Scroll para el mapa
         mapScrollPane = new JScrollPane(mapPanel);
         mapScrollPane.setPreferredSize(new Dimension(800, 600));
         mapScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
         mapScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
 
-        // Panel de control (abajo)
         JPanel controlPanel = new JPanel(new BorderLayout());
 
-        // Panel superior con botones
-        JPanel topPanel = new JPanel(new FlowLayout());
-        findRouteButton.setEnabled(false);
+        // Solución: organización vertical
+        JPanel topPanel = new JPanel();
+        topPanel.setLayout(new BoxLayout(topPanel, BoxLayout.Y_AXIS));
+
+        JPanel statusPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        statusPanel.add(statusLabel);
+
+        JPanel buttonPanel = new JPanel(new GridLayout(2, 3, 10, 5));
+        findRouteButton.setEnabled(true);
+        findRouteAStarButton.setEnabled(true);
+        findRouteALTButton.setEnabled(true);
 
         findRouteButton.addActionListener(e -> calculateRoute());
+        findRouteAStarButton.addActionListener(e -> calculateRouteWithAStar());
+        findRouteALTButton.addActionListener(e -> calculateRouteWithALT());
         clearButton.addActionListener(e -> clearSelection());
         showGuiButton.addActionListener(e -> toggleConsole());
 
-        topPanel.add(statusLabel);
-        topPanel.add(findRouteButton);
-        topPanel.add(clearButton);
-        topPanel.add(showGuiButton);
+        buttonPanel.add(findRouteButton);
+        buttonPanel.add(findRouteAStarButton);
+        buttonPanel.add(findRouteALTButton);
+        buttonPanel.add(clearButton);
+        buttonPanel.add(showGuiButton);
 
-        // Área de información
+        topPanel.add(statusPanel);
+        topPanel.add(buttonPanel);
+
         infoArea = new JTextArea(8, 40);
         infoArea.setEditable(false);
         infoArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
         JScrollPane infoScrollPane = new JScrollPane(infoArea);
         infoScrollPane.setBorder(BorderFactory.createTitledBorder("Route Information"));
 
-        // Armar panel de control
         controlPanel.add(topPanel, BorderLayout.NORTH);
         controlPanel.add(infoScrollPane, BorderLayout.CENTER);
 
-        // Agregar todo al frame
         mainFrame.add(mapScrollPane, BorderLayout.CENTER);
         mainFrame.add(controlPanel, BorderLayout.SOUTH);
 
-        // Configuración visual del frame
         mainFrame.setExtendedState(JFrame.MAXIMIZED_BOTH);
-        mainFrame.setSize(1200, 800);
+        mainFrame.setSize(1600, 900);
         mainFrame.setLocationRelativeTo(null);
         mainFrame.setVisible(true);
 
-        // Mensaje inicial
         updateInfoArea("GUI initialized. Map data loaded with " +
                 (graphData != null ? graphData.length : 0) + " nodes.\n" +
                 "Click on the map to select origin and destination for route planning.");
@@ -437,12 +448,81 @@ public class Test {
         mapPanel.repaint();
     }
 
-    
+    private void calculateRouteWithAStar() {
+        AStarSearch aStar = new AStarSearch(mapPanel.graphData, mapPanel.idToCoordData);
+        AStarSearch.Result result = aStar.compute(mapPanel.selectedOrigin, mapPanel.selectedDestination);
+        renderRoute(result, "A* Search");
+    }
+
+    private void calculateRouteWithALT() {
+        // Puedes elegir landmarks fijos por ahora
+        List<Integer> landmarks = Arrays.asList(0, 10, 50);
+        ALTSearch alt = new ALTSearch(mapPanel.graphData, mapPanel.idToCoordData, landmarks);
+        ALTSearch.Result result = alt.compute(mapPanel.selectedOrigin, mapPanel.selectedDestination);
+        renderRoute(result, "ALT Search");
+    }
+
+    private void renderRoute(Object resultObj, String label) {
+        List<Integer> path = null;
+        long distance = -1;
+
+        if (resultObj instanceof AStarSearch.Result) {
+            AStarSearch.Result result = (AStarSearch.Result) resultObj;
+            path = result.path;
+            distance = result.distance;
+        } else if (resultObj instanceof ALTSearch.Result) {
+            ALTSearch.Result result = (ALTSearch.Result) resultObj;
+            path = result.path;
+            distance = result.distance;
+        }
+
+        if (path == null || path.isEmpty()) {
+            updateInfoArea("No route found using " + label + ".");
+            return;
+        }
+
+        mapPanel.currentRoute.clear();
+        mapPanel.currentRoute.addAll(path);
+
+        StringBuilder info = new StringBuilder();
+        info.append(label).append(" - Route found!\n")
+            .append("Distance: ").append(distance).append(" meters\n")
+            .append("Segments: ").append(path.size() - 1).append("\n\n");
+
+        info.append("Route details:\n");
+        for (int i = 0; i < Math.min(path.size() - 1, 10); i++) {
+            int from = path.get(i);
+            int to = path.get(i + 1);
+            String streetName = "Unknown";
+
+            for (Edge edge : mapPanel.graphData[from].outEdges) {
+                if (edge.to == to) {
+                    streetName = edge.streetName;
+                    break;
+                }
+            }
+
+            info.append(String.format("%d. Node %d -> %d via %s\n", i + 1, from, to, streetName));
+        }
+
+        if (path.size() > 11) {
+            info.append("... and ").append(path.size() - 11).append(" more segments\n");
+        }
+
+        info.append("\nOrigin: ").append(mapPanel.idToCoordData.get(mapPanel.selectedOrigin)).append("\n");
+        info.append("Destination: ").append(mapPanel.idToCoordData.get(mapPanel.selectedDestination));
+
+        updateInfoArea(info.toString());
+        mapPanel.repaint();
+    }
+
     private void clearSelection() {
         selectedOrigin = null;
         selectedDestination = null;
         currentRoute.clear();
         findRouteButton.setEnabled(false);
+        findRouteAStarButton.setEnabled(false);
+        findRouteALTButton.setEnabled(false);
         statusLabel.setText("Selection cleared. Click on the map to select origin and destination nodes.");
         updateInfoArea("Selection cleared. Ready for new route planning.");
         mapPanel.repaint();

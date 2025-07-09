@@ -23,6 +23,8 @@ public class MapPanel extends JPanel {
 
     public JLabel statusLabel;
     public JButton findRouteButton;
+    public JButton findRouteAStarButton;
+    public JButton findRouteALTButton;
 
     public static final Color STREET_COLOR = new Color(200, 200, 200);
     public static final Color ORIGIN_COLOR = Color.GREEN;

@@ -78,15 +78,19 @@ public class MapInteractionHandler {
             } else if (panel.selectedDestination == null && !nodeId.equals(panel.selectedOrigin)) {
                 panel.selectedDestination = nodeId;
                 panel.statusLabel.setText("Destination selected: Node " + nodeId + ". Press 'Find Route' to calculate path.");
-                panel.findRouteButton.setEnabled(true);
             } else {
                 // Reset and start over
                 panel.selectedOrigin = nodeId;
                 panel.selectedDestination = null;
                 panel.currentRoute.clear();
                 panel.statusLabel.setText("Origin selected: Node " + nodeId + ". Click another node for destination.");
-                panel.findRouteButton.setEnabled(false);
             }
+
+            // Activar botones si ambos nodos están seleccionados
+            boolean bothSelected = panel.selectedOrigin != null && panel.selectedDestination != null;
+            if (panel.findRouteButton != null) panel.findRouteButton.setEnabled(bothSelected);
+            if (panel.findRouteAStarButton != null) panel.findRouteAStarButton.setEnabled(bothSelected);
+            if (panel.findRouteALTButton != null) panel.findRouteALTButton.setEnabled(bothSelected);
 
             panel.repaint();
         }
