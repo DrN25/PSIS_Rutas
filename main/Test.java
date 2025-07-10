@@ -72,24 +72,7 @@ public class Test {
                 totalEdges++;
             }
         }
-        
-        // System.out.println("Number of directed edges: " + totalEdges);
-
-        // Análisis de direccionalidad
-        int bidirectionalCount = 0;
-        int unidirectionalCount = 0;
-        for (Route route : result.routes) {
-            if (route.isBidirectional) {
-                bidirectionalCount++;
-            } else {
-                unidirectionalCount++;
-            }
-        }
-
-        // System.out.println("Bidirectional routes: " + bidirectionalCount);
-        // System.out.println("Unidirectional routes: " + unidirectionalCount);
-        // System.out.println("Percentage bidirectional: " + (bidirectionalCount * 100.0 / result.routes.size()) + "%");
-                
+            
         // Crear mapa de aristas para búsqueda rápida
         Map<String, String> streetNameMap = new HashMap<>();
         for (Route route : result.routes) {
@@ -126,51 +109,17 @@ public class Test {
             }
         }
         
-        // System.out.println("Number of connected components: " + componentCount);
-        
-        // Mostrar tamaño de cada componente
-        Map<Integer, Integer> componentSizes = new HashMap<>();
-        for (int comp : componentMap.values()) {
-            componentSizes.put(comp, componentSizes.getOrDefault(comp, 0) + 1);
-        }
-        
-        // System.out.println("Component sizes:");
-        for (Map.Entry<Integer, Integer> entry : componentSizes.entrySet()) {
-            if (entry.getValue() > 1) { // Solo mostrar componentes con más de 1 nodo
-                // System.out.println("Component " + entry.getKey() + ": " + entry.getValue() + " nodes");
-            }
-        }
-        
-        // Mostrar algunas coordenadas de ejemplo
-        // System.out.println("\nExample coordinates from the dataset:");
-        int count = 0;
-        for (Map.Entry<Integer, String> entry : result.idToCoord.entrySet()) {
-            if (count < 10) {
-                // System.out.println("ID " + entry.getKey() + ": " + entry.getValue() + " (Component: " + componentMap.get(entry.getKey()) + ")");
-                count++;
-            } else {
-                break;
-            }
-        }
-        
-        // CONSULTA ESPECIFICA AUTOMATICA: Nodo 0 (CANTILO, INT.) -> Nodo 9 (LA CACHILA)
-        // System.out.println("\n" + "=".repeat(60));
-        // System.out.println("CONSULTA ESPECIFICA AUTOMATICA");
-        // System.out.println("=".repeat(60));
-        
         // Buscar información sobre los nodos específicos
         String node0Name = "CANTILO, INT.";
         String node9Name = "LA CACHILA";
         
         if (result.idToCoord.containsKey(0) && result.idToCoord.containsKey(9)) {
-            RouteDisplayer.showDetailedRoute(graph, result.idToCoord, streetNameMap, 0, 9, node0Name, node9Name);
-            
             // ANALISIS PROFUNDO: Conectividad local de los nodos
-            ConnectivityAnalizer.analyzeLocalConnectivity(graph, result.idToCoord, streetNameMap, 0, node0Name);
-            ConnectivityAnalizer.analyzeLocalConnectivity(graph, result.idToCoord, streetNameMap, 9, node9Name);
+            ConnectivityAnalizer.analyzeLocalConnectivity(graph, result.idToCoord, 0, node0Name);
+            ConnectivityAnalizer.analyzeLocalConnectivity(graph, result.idToCoord, 9, node9Name);
             
             // BUSCAR RUTAS QUE SI FUNCIONEN para verificar que el sistema esta bien
-            ConnectivityAnalizer.findConnectedPairs(graph, result.idToCoord, streetNameMap, 3);
+            ConnectivityAnalizer.findConnectedPairs(graph, result.idToCoord, 3);
             
         } else {
             // System.out.println("ERROR: Los nodos 0 o 9 no existen en el dataset");
@@ -185,79 +134,6 @@ public class Test {
         
         // Query phase - input manual del usuario
         BidirectionalSearch bidirectionalSearch = new BidirectionalSearch(graph);
-        
-        // Scanner in = new Scanner(System.in);
-        // System.out.println("\nEnter the number of queries (0 to skip):");
-        int q = 0; // skip manual queries, go directly to GUI
-        // in.nextLine(); // Consume newline
-        
-        // for (int i = 0; i < q; i++) {
-        //     System.out.println("Enter source coordinates (longitude latitude):");
-        //     System.out.println("Example: -58.462187566063186 -34.53451590464167");
-        //     String sourceCoord = in.nextLine().trim();
-        //     System.out.println("Enter target coordinates (longitude latitude):");
-        //     System.out.println("Example: -58.46678379560394 -34.535002649404596");
-        //     String targetCoord = in.nextLine().trim();
-        //     int source = GraphUtils.findNearestNode(sourceCoord, result.nodeIndex, result.idToCoord);
-        //     int target = GraphUtils.findNearestNode(targetCoord, result.nodeIndex, result.idToCoord);
-        //     if (source == -1) {
-        //         System.out.println("Could not find a node near the source coordinates: " + sourceCoord);
-        //         continue;
-        //     }
-        //     if (target == -1) {
-        //         System.out.println("Could not find a node near the target coordinates: " + targetCoord);
-        //         continue;
-        //     }
-        //     System.out.println("Found nearest nodes - Source: " + source + " (Component: " + componentMap.get(source) + "), Target: " + target + " (Component: " + componentMap.get(target) + ")");
-        //     if (!componentMap.get(source).equals(componentMap.get(target))) {
-        //         System.out.println("No route possible - nodes are in different connected components");
-        //         System.out.println("---");
-        //         continue;
-        //     }
-        //     for (Node node : graph) {
-        //         node.distance = new Distance();
-        //     }
-        //     BidirectionalSearch.PathResult resul = bidirectionalSearch.computeShortestPathEnhanced(source, target, i);
-        //     if (resul.distance == -1) {
-        //         System.out.println("No route exists with Contraction Hierarchies");
-        //         System.out.println("Trying simple Dijkstra as fallback...");
-        //         long simpleDijkstraResult = GraphUtils.simpleDijkstra(graph, source, target);
-        //         if (simpleDijkstraResult == -1) {
-        //             System.out.println("Confirmed: No route exists between the given coordinates (considering street directions)");
-        //         } else {
-        //             System.out.println("WARNING: Route exists (" + simpleDijkstraResult + "m) but CH failed to find it");
-        //             System.out.println("This suggests an issue with the Contraction Hierarchies preprocessing");
-        //         }
-        //     } else {
-        //         System.out.println("Shortest distance: " + resul.distance + " meters");
-        //         List<Integer> path = bidirectionalSearch.reconstructPath(source, target, resul.meetingNode);
-        //         if (path.size() > 1) {
-        //             System.out.println("Route (" + path.size() + " nodes):");
-        //             for (int j = 0; j < path.size() - 1; j++) {
-        //                 int from = path.get(j);
-        //                 int to = path.get(j + 1);
-        //                 String streetName = streetNameMap.get(from + "_" + to);
-        //                 if (streetName == null) {
-        //                     for (Edge edge : graph[from].outEdges) {
-        //                         if (edge.to == to) {
-        //                             streetName = edge.streetName;
-        //                             break;
-        //                         }
-        //                     }
-        //                     if (streetName == null) streetName = "Unknown street";
-        //                 }
-        //                 System.out.println("  " + (j + 1) + ". Node " + from + " -> " + to + " via " + streetName);
-        //             }
-        //             System.out.println("\nActual origin coordinates: " + result.idToCoord.get(source));
-        //             System.out.println("Actual destination coordinates: " + result.idToCoord.get(target));
-        //         } else {
-        //             System.out.println("Unable to reconstruct the complete path");
-        //         }
-        //     }
-        //     System.out.println("---");
-        // }
-        
-        // in.close();
         
         // Automatically launch GUI after console queries
         System.out.println("\n" + "=".repeat(60));
@@ -395,7 +271,7 @@ public class Test {
         long durationMs = -1;
 
         try {
-            long startTime = System.nanoTime(); // INICIO
+            long startTime = System.nanoTime(); // ⏱ INICIO
 
             switch (selectedAlgorithm) {
                 case CCH:
@@ -426,7 +302,7 @@ public class Test {
                     break;
             }
 
-            long endTime = System.nanoTime(); // FIN
+            long endTime = System.nanoTime(); // ⏱ FIN
             durationMs = (endTime - startTime) / 1_000_000;
 
         } catch (Exception e) {
@@ -468,7 +344,7 @@ public class Test {
 
             if (path.size() > 1) {
                 routeInfo.append("Route details:\n");
-                for (int i = 0; i < Math.min(path.size() - 1, 10); i++) {
+                for (int i = 0; i < path.size() - 1; i++) {  // ← recorremos todo el path
                     int from = path.get(i);
                     int to = path.get(i + 1);
 
@@ -482,10 +358,6 @@ public class Test {
 
                     routeInfo.append(String.format("%d. Node %d -> %d via %s\n",
                         i + 1, from, to, streetName));
-                }
-
-                if (path.size() > 11) {
-                    routeInfo.append("... and ").append(path.size() - 11).append(" more segments\n");
                 }
 
                 routeInfo.append("\nOrigin: ").append(mapPanel.idToCoordData.get(mapPanel.selectedOrigin)).append("\n");

@@ -9,7 +9,7 @@ import models.*;
 public class ConnectivityAnalizer {
   // Función para analizar la conectividad local de un nodo
     public static void analyzeLocalConnectivity(Node[] graph, Map<Integer, String> idToCoord, 
-                                              Map<String, String> streetNameMap, int nodeId, String nodeName) {
+                                              int nodeId, String nodeName) {
         System.out.println("\n[CONNECTIVITY] ANALISIS LOCAL DEL NODO " + nodeId + " (" + nodeName + "):");
         System.out.println("Coordenadas: " + idToCoord.get(nodeId));
         
@@ -52,7 +52,7 @@ public class ConnectivityAnalizer {
     
     // Función para encontrar pares de nodos conectados para pruebas
     public static void findConnectedPairs(Node[] graph, Map<Integer, String> idToCoord, 
-                                        Map<String, String> streetNameMap, int maxTests) {
+                                         int maxTests) {
         System.out.println("\n[TESTING] BUSCANDO PARES DE NODOS CONECTADOS:");
         System.out.println("==========================================");
         
