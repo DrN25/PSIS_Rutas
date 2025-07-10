@@ -288,4 +288,8 @@ public class ContractionHierarchies {
         
         System.out.println("Reset to default distance-based weights");
     }
+
+    public BidirectionalSearch getBidirectionalSearch() {
+        return new BidirectionalSearch(graph); // Usa el grafo ya preprocesado
+    }
 }

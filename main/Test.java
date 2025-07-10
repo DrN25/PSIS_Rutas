@@ -86,10 +86,10 @@ public class Test {
         long preprocessingStartTime = System.currentTimeMillis();
         ContractionHierarchies ch = new ContractionHierarchies(graph);
         ch.preprocess();
-        chInstance = ch; // Store the CH instance for GUI use
-        
+        chInstance = ch; // Store the CH instance for GUI uses
         // Initialize with default profile
         chInstance.setProfile(VehicleProfile.VEHICULOS);
+        bidirectionalSearchData = ch.getBidirectionalSearch();
         
         long preprocessingTime = System.currentTimeMillis() - preprocessingStartTime;
         System.out.println("Preprocessing complete!");
@@ -131,10 +131,7 @@ public class Test {
                 // System.out.println("Nodo 9 existe: " + result.idToCoord.get(9));
             }
         }
-        
-        // Query phase - input manual del usuario
-        BidirectionalSearch bidirectionalSearch = new BidirectionalSearch(graph);
-        
+               
         // Automatically launch GUI after console queries
         System.out.println("\n" + "=".repeat(60));
         System.out.println("INTERFAZ GRAFICA - INICIANDO AUTOMATICAMENTE");
@@ -142,7 +139,7 @@ public class Test {
         System.out.println("Launching GUI automatically...");
         
         // Set map data for GUI
-        setMapData(graph, result.idToCoord, streetNameMap, bidirectionalSearch);
+        setMapData(graph, result.idToCoord, streetNameMap);
         
         // Create and show GUI
         Test guiInstance = new Test();
@@ -406,12 +403,10 @@ public class Test {
     
     // Method to set the static data from main method
     public static void setMapData(Node[] graph, Map<Integer, String> idToCoord, 
-                                 Map<String, String> streetNameMap, 
-                                 BidirectionalSearch bidirectionalSearch) {
+                                 Map<String, String> streetNameMap) {
         graphData = graph;
         idToCoordData = idToCoord;
         streetNameMapData = streetNameMap;
-        bidirectionalSearchData = bidirectionalSearch;
     }
     
     private void onProfileChanged() {
